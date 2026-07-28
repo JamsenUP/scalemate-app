@@ -1,388 +1,496 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import pg from 'pg';
+const { Pool } = pg;
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_FILE = path.join(__dirname, 'database.json');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
-const defaultData = {
-  users: [],
-  likes: [], // { fromId, toId, type: 'like'|'dislike', timestamp }
-  messages: [] // { chatId, senderId, text, timestamp }
-};
-
-class Database {
-  constructor() {
-    this.data = { ...defaultData };
-    this.load();
-  }
-
-  load() {
-    try {
-      if (fs.existsSync(DB_FILE)) {
-        const fileContent = fs.readFileSync(DB_FILE, 'utf8');
-        this.data = JSON.parse(fileContent);
-      } else {
-        this.save();
-      }
-    } catch (error) {
-      console.error('Error loading database:', error);
-      this.data = { ...defaultData };
-    }
-  }
-
-  save() {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf8');
-    } catch (error) {
-      console.error('Error saving database:', error);
-    }
-  }
-
-  // User methods
-  getUsers() {
-    return this.data.users;
-  }
-
-  getUser(id) {
-    const userIdStr = String(id);
-    return this.data.users.find(u => String(u.id) === userIdStr || String(u.telegramId) === userIdStr);
-  }
-
-  createUser(user) {
-    const newUser = {
-      id: user.telegramId || String(Date.now()),
-      telegramId: user.telegramId || null,
-      username: user.username || user.telegramUsername || null,
-      name: user.name || 'Аноним',
-      age: parseInt(user.age) || 18,
-      gender: user.gender || 'female',
-      preferredGender: user.preferredGender || 'male',
-      height: parseInt(user.height) || 170,
-      weight: parseFloat(user.weight) || 60,
-      bmi: parseFloat(user.bmi) || 20.8,
-      bio: user.bio || '',
-      photos: user.photos || [],
-      isVerified: user.isVerified || false,
-      verificationPhoto: user.verificationPhoto || null,
-      verificationSelfie: user.verificationSelfie || null,
-      verificationDate: user.verificationDate || null,
-      createdAt: new Date().toISOString()
-    };
-    
-    // Calculate BMI if height and weight exist
-    if (newUser.height && newUser.weight) {
-      const heightInMeters = newUser.height / 100;
-      newUser.bmi = parseFloat((newUser.weight / (heightInMeters * heightInMeters)).toFixed(1));
-    }
-
-    this.data.users.push(newUser);
-    this.save();
-    return newUser;
-  }
-
-  updateUser(id, updateData) {
-    const userIdStr = String(id);
-    const index = this.data.users.findIndex(u => String(u.id) === userIdStr || String(u.telegramId) === userIdStr);
-    
-    if (index !== -1) {
-      const updatedUser = { ...this.data.users[index], ...updateData };
-      
-      // Recalculate BMI if height or weight updated
-      if (updatedUser.height && updatedUser.weight) {
-        const heightInMeters = updatedUser.height / 100;
-        updatedUser.bmi = parseFloat((updatedUser.weight / (heightInMeters * heightInMeters)).toFixed(1));
-      }
-      
-      this.data.users[index] = updatedUser;
-      this.save();
-      return updatedUser;
-    }
-    return null;
-  }
-
-  // Like / Dislike methods
-  addLike(fromId, toId, type = 'like') {
-    const newLike = {
-      fromId: String(fromId),
-      toId: String(toId),
-      type,
-      timestamp: new Date().toISOString()
-    };
-
-    // Remove existing like/dislike between these two just in case
-    this.data.likes = this.data.likes.filter(
-      l => !(l.fromId === newLike.fromId && l.toId === newLike.toId)
-    );
-
-    this.data.likes.push(newLike);
-    this.save();
-
-    // Check if it's a mutual like
-    if (type === 'like') {
-      const mutualLike = this.data.likes.find(
-        l => l.fromId === newLike.toId && l.toId === newLike.fromId && l.type === 'like'
+// Initialize tables on startup
+export async function initDB() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        telegram_id TEXT UNIQUE,
+        username TEXT,
+        name TEXT,
+        age INTEGER,
+        gender TEXT DEFAULT 'female',
+        preferred_gender TEXT DEFAULT 'male',
+        height INTEGER,
+        weight REAL,
+        bmi REAL,
+        bio TEXT DEFAULT '',
+        photos TEXT[] DEFAULT '{}',
+        is_verified BOOLEAN DEFAULT false,
+        verification_photo TEXT,
+        verification_selfie TEXT,
+        verification_status TEXT DEFAULT 'none',
+        verification_date TIMESTAMPTZ,
+        rejection_reason TEXT,
+        is_admin BOOLEAN DEFAULT false,
+        is_face_verified BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       );
-      return !!mutualLike; // returns true if it's a match!
-    }
-    return false;
-  }
 
-  blockUser(userId, targetUserId) {
-    const userIdStr = String(userId);
-    const targetIdStr = String(targetUserId);
-
-    // Remove likes/matches between these two
-    this.data.likes = this.data.likes.filter(
-      l => !(
-        (l.fromId === userIdStr && l.toId === targetIdStr) ||
-        (l.fromId === targetIdStr && l.toId === userIdStr)
-      )
-    );
-
-    // Remove messages
-    const chatId = [userIdStr, targetIdStr].sort().join('_');
-    this.data.messages = this.data.messages.filter(m => m.chatId !== chatId);
-
-    // Record dislike block so target never appears in feed again
-    this.data.likes.push({
-      fromId: userIdStr,
-      toId: targetIdStr,
-      type: 'dislike',
-      timestamp: new Date().toISOString()
-    });
-
-    this.save();
-    return true;
-  }
-
-  // Get potential profiles for swipes (excluding self, already liked/disliked, and only verified if user requires it)
-  getSwipeFeed(userId) {
-    const userIdStr = String(userId);
-    const user = this.getUser(userIdStr);
-    if (!user) return [];
-
-    // Find profiles already swiped by this user
-    const swipedUserIds = new Set(
-      this.data.likes
-        .filter(l => l.fromId === userIdStr)
-        .map(l => l.toId)
-    );
-
-    return this.data.users.filter(u => {
-      const currentIdStr = String(u.id);
-      
-      // Cannot swipe self
-      if (currentIdStr === userIdStr) return false;
-      
-      // Cannot swipe already swiped profiles
-      if (swipedUserIds.has(currentIdStr)) return false;
-      
-      // Filter by gender preferences
-      if (user.preferredGender !== 'all' && u.gender !== user.preferredGender) return false;
-      if (u.preferredGender !== 'all' && u.preferredGender !== user.gender) return false;
-
-      // Crucial dating bot logic: Only show verified users
-      if (!u.isVerified) return false;
-
-      return true;
-    });
-  }
-
-  // Get list of mutual matches for a user
-  getMatches(userId) {
-    const userIdStr = String(userId);
-    
-    // Find all likes from this user
-    const myLikes = this.data.likes.filter(l => l.fromId === userIdStr && l.type === 'like');
-    
-    const matches = [];
-    
-    for (const like of myLikes) {
-      const mutualLike = this.data.likes.find(
-        l => l.fromId === like.toId && l.toId === userIdStr && l.type === 'like'
+      CREATE TABLE IF NOT EXISTS likes (
+        id SERIAL PRIMARY KEY,
+        from_id TEXT NOT NULL,
+        to_id TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'like',
+        timestamp TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(from_id, to_id)
       );
-      
-      if (mutualLike) {
-        const matchedUser = this.getUser(like.toId);
-        if (matchedUser) {
-          // Find last message if any
-          const chatId = [userIdStr, String(like.toId)].sort().join('_');
-          const chatMessages = this.data.messages.filter(m => m.chatId === chatId);
-          const lastMessage = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
 
-          matches.push({
-            user: matchedUser,
-            chatId,
-            lastMessage
-          });
-        }
-      }
-    }
-    
-    return matches;
-  }
-
-  // Chat methods
-  addMessage(chatId, senderId, text) {
-    const newMessage = {
-      chatId,
-      senderId: String(senderId),
-      text,
-      timestamp: new Date().toISOString()
-    };
-    
-    this.data.messages.push(newMessage);
-    this.save();
-    return newMessage;
-  }
-
-  getMessages(chatId) {
-    return this.data.messages.filter(m => m.chatId === chatId);
-  }
-
-  // Admin & Analytics methods
-  getAdminStats() {
-    const totalUsers = this.data.users.length;
-    const verifiedUsers = this.data.users.filter(u => u.isVerified).length;
-    const pendingVerifications = this.data.users.filter(u => !u.isVerified && u.verificationPhoto).length;
-    const totalLikes = this.data.likes.length;
-    const totalMessages = this.data.messages.length;
-
-    return {
-      totalUsers,
-      verifiedUsers,
-      pendingVerifications,
-      totalLikes,
-      totalMessages
-    };
-  }
-
-  getPendingVerifications() {
-    return this.data.users
-      .filter(u => !u.isVerified && u.verificationStatus === 'pending_moderation')
-      .map(u => ({
-        user: u,
-        photo: u.verificationPhoto,
-        selfie: u.verificationSelfie,
-        claimedWeight: u.weight,
-        requestedAt: u.verificationDate || u.createdAt
-      }));
-  }
-
-  getAllUsers() {
-    return this.data.users.map(u => ({
-      user: u,
-      photo: u.verificationPhoto || u.photos?.[0],
-      selfie: u.verificationSelfie,
-      claimedWeight: u.weight,
-      registeredAt: u.createdAt || u.verificationDate
-    }));
-  }
-
-  getVerifiedUsers() {
-    return this.data.users
-      .filter(u => u.isVerified)
-      .map(u => ({
-        user: u,
-        photo: u.verificationPhoto,
-        selfie: u.verificationSelfie,
-        claimedWeight: u.weight,
-        verifiedAt: u.verificationDate || u.createdAt
-      }));
-  }
-
-  deleteUser(userId) {
-    const idStr = String(userId);
-    this.data.users = this.data.users.filter(u => String(u.id) !== idStr);
-    this.data.likes = this.data.likes.filter(l => String(l.fromId) !== idStr && String(l.toId) !== idStr);
-    this.data.messages = this.data.messages.filter(m => !m.chatId.includes(idStr));
-    this.save();
-    return true;
-  }
-
-  approveVerification(userId, weightOverride = null) {
-    const user = this.getUser(userId);
-    if (user) {
-      const finalWeight = weightOverride ? parseFloat(weightOverride) : user.weight;
-      return this.updateUser(user.id, {
-        isVerified: true,
-        verificationStatus: 'approved',
-        weight: finalWeight,
-        verificationDate: new Date().toISOString()
-      });
-    }
-    return null;
-  }
-
-  rejectVerification(userId, reason = 'Качество изображения недостаточно') {
-    const user = this.getUser(userId);
-    if (user) {
-      return this.updateUser(user.id, {
-        isVerified: false,
-        verificationStatus: 'rejected',
-        verificationPhoto: null,
-        rejectionReason: reason
-      });
-    }
-    return null;
-  }
-
-  revokeVerification(userId, reason = 'Верификация отменена администратором @jamsenbang') {
-    const user = this.getUser(userId);
-    if (user) {
-      return this.updateUser(user.id, {
-        isVerified: false,
-        verificationStatus: 'rejected',
-        verificationPhoto: null,
-        rejectionReason: reason
-      });
-    }
-    return null;
-  }
-
-  // Swipe History methods
-  getSwipeHistory(userId) {
-    const userIdStr = String(userId);
-    return this.data.likes
-      .filter(l => l.fromId === userIdStr)
-      .map(l => {
-        const targetUser = this.getUser(l.toId);
-        return {
-          targetUser,
-          type: l.type, // 'like' | 'dislike'
-          timestamp: l.timestamp
-        };
-      })
-      .filter(h => h.targetUser !== undefined); // Exclude if user deleted
-  }
-
-  changeSwipeDecision(userId, targetUserId, newAction) {
-    const userIdStr = String(userId);
-    const targetUserIdStr = String(targetUserId);
-
-    // Find the swipe entry
-    const index = this.data.likes.findIndex(
-      l => l.fromId === userIdStr && l.toId === targetUserIdStr
-    );
-
-    if (index !== -1) {
-      this.data.likes[index].type = newAction;
-      this.data.likes[index].timestamp = new Date().toISOString();
-      this.save();
-
-      // Check if it's a match now
-      if (newAction === 'like') {
-        const mutualLike = this.data.likes.find(
-          l => l.fromId === targetUserIdStr && l.toId === userIdStr && l.type === 'like'
-        );
-        return !!mutualLike;
-      }
-    }
-    return false;
+      CREATE TABLE IF NOT EXISTS messages (
+        id SERIAL PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        timestamp TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log('✅ PostgreSQL tables initialized');
+  } finally {
+    client.release();
   }
 }
 
-export const db = new Database();
+function calcBmi(height, weight) {
+  if (!height || !weight) return null;
+  const h = height / 100;
+  return parseFloat((weight / (h * h)).toFixed(1));
+}
 
+function rowToUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    telegramId: row.telegram_id,
+    username: row.username,
+    name: row.name,
+    age: row.age,
+    gender: row.gender,
+    preferredGender: row.preferred_gender,
+    height: row.height,
+    weight: row.weight,
+    bmi: row.bmi,
+    bio: row.bio || '',
+    photos: row.photos || [],
+    isVerified: row.is_verified,
+    verificationPhoto: row.verification_photo,
+    verificationSelfie: row.verification_selfie,
+    verificationStatus: row.verification_status,
+    verificationDate: row.verification_date,
+    rejectionReason: row.rejection_reason,
+    isAdmin: row.is_admin,
+    isFaceVerified: row.is_face_verified,
+    createdAt: row.created_at
+  };
+}
 
+function rowToLike(row) {
+  if (!row) return null;
+  return {
+    fromId: row.from_id,
+    toId: row.to_id,
+    type: row.type,
+    timestamp: row.timestamp
+  };
+}
+
+function rowToMessage(row) {
+  if (!row) return null;
+  return {
+    chatId: row.chat_id,
+    senderId: row.sender_id,
+    text: row.text,
+    timestamp: row.timestamp
+  };
+}
+
+// ─── User Methods ───────────────────────────────────────────────
+
+export async function getUser(id) {
+  const idStr = String(id);
+  const res = await pool.query(
+    `SELECT * FROM users WHERE id = $1 OR telegram_id = $1 LIMIT 1`,
+    [idStr]
+  );
+  return rowToUser(res.rows[0]);
+}
+
+export async function getUsers() {
+  const res = await pool.query(`SELECT * FROM users ORDER BY created_at DESC`);
+  return res.rows.map(rowToUser);
+}
+
+export async function createUser(user) {
+  const id = user.telegramId || String(Date.now());
+  const bmi = calcBmi(user.height, user.weight);
+  const res = await pool.query(
+    `INSERT INTO users (
+      id, telegram_id, username, name, age, gender, preferred_gender,
+      height, weight, bmi, bio, photos, is_verified, verification_photo,
+      verification_selfie, verification_status, verification_date,
+      is_admin, is_face_verified
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7,
+      $8, $9, $10, $11, $12, $13, $14,
+      $15, $16, $17, $18, $19
+    )
+    ON CONFLICT (telegram_id) DO UPDATE SET
+      username = EXCLUDED.username,
+      name = EXCLUDED.name,
+      age = EXCLUDED.age,
+      gender = EXCLUDED.gender,
+      preferred_gender = EXCLUDED.preferred_gender,
+      height = EXCLUDED.height,
+      weight = EXCLUDED.weight,
+      bmi = EXCLUDED.bmi,
+      bio = EXCLUDED.bio,
+      photos = EXCLUDED.photos,
+      is_verified = EXCLUDED.is_verified,
+      verification_status = EXCLUDED.verification_status,
+      is_admin = EXCLUDED.is_admin,
+      verification_date = EXCLUDED.verification_date
+    RETURNING *`,
+    [
+      id,
+      user.telegramId || null,
+      user.username || null,
+      user.name || 'Аноним',
+      parseInt(user.age) || 18,
+      user.gender || 'female',
+      user.preferredGender || 'male',
+      parseInt(user.height) || 170,
+      parseFloat(user.weight) || 60,
+      bmi || 20.8,
+      user.bio || '',
+      user.photos || [],
+      user.isVerified || false,
+      user.verificationPhoto || null,
+      user.verificationSelfie || null,
+      user.verificationStatus || 'none',
+      user.verificationDate || null,
+      user.isAdmin || false,
+      user.isFaceVerified || false
+    ]
+  );
+  return rowToUser(res.rows[0]);
+}
+
+export async function updateUser(id, updateData) {
+  const idStr = String(id);
+  // Build dynamic SET clause
+  const fields = [];
+  const values = [];
+  let idx = 1;
+
+  const mapping = {
+    name: 'name',
+    age: 'age',
+    gender: 'gender',
+    preferredGender: 'preferred_gender',
+    height: 'height',
+    weight: 'weight',
+    bmi: 'bmi',
+    bio: 'bio',
+    photos: 'photos',
+    isVerified: 'is_verified',
+    verificationPhoto: 'verification_photo',
+    verificationSelfie: 'verification_selfie',
+    verificationStatus: 'verification_status',
+    verificationDate: 'verification_date',
+    rejectionReason: 'rejection_reason',
+    isAdmin: 'is_admin',
+    isFaceVerified: 'is_face_verified',
+    username: 'username'
+  };
+
+  for (const [jsKey, sqlCol] of Object.entries(mapping)) {
+    if (updateData[jsKey] !== undefined) {
+      fields.push(`${sqlCol} = $${idx}`);
+      values.push(updateData[jsKey]);
+      idx++;
+    }
+  }
+
+  // Recalculate BMI if height or weight changed
+  if (updateData.height || updateData.weight) {
+    // We need to fetch current values to recalc
+    const current = await getUser(idStr);
+    if (current) {
+      const h = updateData.height || current.height;
+      const w = updateData.weight || current.weight;
+      const newBmi = calcBmi(h, w);
+      if (newBmi) {
+        fields.push(`bmi = $${idx}`);
+        values.push(newBmi);
+        idx++;
+      }
+    }
+  }
+
+  if (fields.length === 0) return await getUser(idStr);
+
+  values.push(idStr);
+  const res = await pool.query(
+    `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} OR telegram_id = $${idx} RETURNING *`,
+    values
+  );
+  return rowToUser(res.rows[0]);
+}
+
+export async function deleteUser(userId) {
+  const idStr = String(userId);
+  await pool.query(`DELETE FROM likes WHERE from_id = $1 OR to_id = $1`, [idStr]);
+  await pool.query(`DELETE FROM messages WHERE chat_id LIKE '%' || $1 || '%'`, [idStr]);
+  await pool.query(`DELETE FROM users WHERE id = $1 OR telegram_id = $1`, [idStr]);
+  return true;
+}
+
+// ─── Like / Swipe Methods ────────────────────────────────────────
+
+export async function addLike(fromId, toId, type = 'like') {
+  const fromStr = String(fromId);
+  const toStr = String(toId);
+  await pool.query(
+    `INSERT INTO likes (from_id, to_id, type, timestamp)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (from_id, to_id) DO UPDATE SET type = EXCLUDED.type, timestamp = NOW()`,
+    [fromStr, toStr, type]
+  );
+  if (type === 'like') {
+    const mutual = await pool.query(
+      `SELECT id FROM likes WHERE from_id = $1 AND to_id = $2 AND type = 'like'`,
+      [toStr, fromStr]
+    );
+    return mutual.rows.length > 0;
+  }
+  return false;
+}
+
+export async function blockUser(userId, targetUserId) {
+  const userStr = String(userId);
+  const targetStr = String(targetUserId);
+  const chatId = [userStr, targetStr].sort().join('_');
+  await pool.query(
+    `DELETE FROM likes WHERE (from_id=$1 AND to_id=$2) OR (from_id=$2 AND to_id=$1)`,
+    [userStr, targetStr]
+  );
+  await pool.query(`DELETE FROM messages WHERE chat_id = $1`, [chatId]);
+  await pool.query(
+    `INSERT INTO likes (from_id, to_id, type) VALUES ($1, $2, 'dislike')
+     ON CONFLICT (from_id, to_id) DO UPDATE SET type = 'dislike'`,
+    [userStr, targetStr]
+  );
+  return true;
+}
+
+export async function getSwipeFeed(userId) {
+  const userStr = String(userId);
+  const user = await getUser(userStr);
+  if (!user) return [];
+
+  const swipedRes = await pool.query(
+    `SELECT to_id FROM likes WHERE from_id = $1`,
+    [userStr]
+  );
+  const swipedIds = swipedRes.rows.map(r => r.to_id);
+  swipedIds.push(userStr); // exclude self
+
+  let query = `SELECT * FROM users WHERE is_verified = true AND id != ALL($1::text[])`;
+  const params = [swipedIds];
+  let idx = 2;
+
+  if (user.preferredGender !== 'all') {
+    query += ` AND gender = $${idx}`;
+    params.push(user.preferredGender);
+    idx++;
+  }
+
+  const res = await pool.query(query, params);
+  return res.rows
+    .filter(u => u.preferred_gender === 'all' || u.preferred_gender === user.gender)
+    .map(rowToUser);
+}
+
+export async function getMatches(userId) {
+  const userStr = String(userId);
+  const res = await pool.query(
+    `SELECT l1.to_id as match_id FROM likes l1
+     INNER JOIN likes l2 ON l1.from_id = l2.to_id AND l1.to_id = l2.from_id
+     WHERE l1.from_id = $1 AND l1.type = 'like' AND l2.type = 'like'`,
+    [userStr]
+  );
+
+  const matches = [];
+  for (const row of res.rows) {
+    const matchedUser = await getUser(row.match_id);
+    if (matchedUser) {
+      const chatId = [userStr, row.match_id].sort().join('_');
+      const msgRes = await pool.query(
+        `SELECT * FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 1`,
+        [chatId]
+      );
+      matches.push({
+        user: matchedUser,
+        chatId,
+        lastMessage: msgRes.rows[0] ? rowToMessage(msgRes.rows[0]) : null
+      });
+    }
+  }
+  return matches;
+}
+
+export async function getSwipeHistory(userId) {
+  const userStr = String(userId);
+  const res = await pool.query(
+    `SELECT * FROM likes WHERE from_id = $1 ORDER BY timestamp DESC`,
+    [userStr]
+  );
+  const history = [];
+  for (const row of res.rows) {
+    const targetUser = await getUser(row.to_id);
+    if (targetUser) {
+      history.push({ targetUser, type: row.type, timestamp: row.timestamp });
+    }
+  }
+  return history;
+}
+
+export async function changeSwipeDecision(userId, targetUserId, newAction) {
+  const userStr = String(userId);
+  const targetStr = String(targetUserId);
+  await pool.query(
+    `UPDATE likes SET type = $1, timestamp = NOW() WHERE from_id = $2 AND to_id = $3`,
+    [newAction, userStr, targetStr]
+  );
+  if (newAction === 'like') {
+    const mutual = await pool.query(
+      `SELECT id FROM likes WHERE from_id = $1 AND to_id = $2 AND type = 'like'`,
+      [targetStr, userStr]
+    );
+    return mutual.rows.length > 0;
+  }
+  return false;
+}
+
+// ─── Chat Methods ─────────────────────────────────────────────────
+
+export async function addMessage(chatId, senderId, text) {
+  const res = await pool.query(
+    `INSERT INTO messages (chat_id, sender_id, text) VALUES ($1, $2, $3) RETURNING *`,
+    [chatId, String(senderId), text]
+  );
+  return rowToMessage(res.rows[0]);
+}
+
+export async function getMessages(chatId) {
+  const res = await pool.query(
+    `SELECT * FROM messages WHERE chat_id = $1 ORDER BY timestamp ASC`,
+    [chatId]
+  );
+  return res.rows.map(rowToMessage);
+}
+
+// ─── Admin & Analytics ────────────────────────────────────────────
+
+export async function getAdminStats() {
+  const totalRes = await pool.query(`SELECT COUNT(*) FROM users`);
+  const verifiedRes = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = true`);
+  const pendingRes = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = false AND verification_photo IS NOT NULL`);
+  const likesRes = await pool.query(`SELECT COUNT(*) FROM likes`);
+  const msgRes = await pool.query(`SELECT COUNT(*) FROM messages`);
+  return {
+    totalUsers: parseInt(totalRes.rows[0].count),
+    verifiedUsers: parseInt(verifiedRes.rows[0].count),
+    pendingVerifications: parseInt(pendingRes.rows[0].count),
+    totalLikes: parseInt(likesRes.rows[0].count),
+    totalMessages: parseInt(msgRes.rows[0].count)
+  };
+}
+
+export async function getAllUsers() {
+  const res = await pool.query(`SELECT * FROM users ORDER BY created_at DESC`);
+  return res.rows.map(row => ({
+    user: rowToUser(row),
+    photo: row.verification_photo || (row.photos && row.photos[0]),
+    selfie: row.verification_selfie,
+    claimedWeight: row.weight,
+    registeredAt: row.created_at
+  }));
+}
+
+export async function getPendingVerifications() {
+  const res = await pool.query(
+    `SELECT * FROM users WHERE is_verified = false AND verification_status = 'pending_moderation' ORDER BY created_at DESC`
+  );
+  return res.rows.map(row => ({
+    user: rowToUser(row),
+    photo: row.verification_photo,
+    selfie: row.verification_selfie,
+    claimedWeight: row.weight,
+    requestedAt: row.verification_date || row.created_at
+  }));
+}
+
+export async function getVerifiedUsers() {
+  const res = await pool.query(
+    `SELECT * FROM users WHERE is_verified = true ORDER BY verification_date DESC`
+  );
+  return res.rows.map(row => ({
+    user: rowToUser(row),
+    photo: row.verification_photo,
+    selfie: row.verification_selfie,
+    claimedWeight: row.weight,
+    verifiedAt: row.verification_date || row.created_at
+  }));
+}
+
+export async function approveVerification(userId, weightOverride = null) {
+  const user = await getUser(userId);
+  if (!user) return null;
+  const finalWeight = weightOverride ? parseFloat(weightOverride) : user.weight;
+  return await updateUser(user.id, {
+    isVerified: true,
+    verificationStatus: 'approved',
+    weight: finalWeight,
+    verificationDate: new Date().toISOString()
+  });
+}
+
+export async function rejectVerification(userId, reason = 'Качество изображения недостаточно') {
+  const user = await getUser(userId);
+  if (!user) return null;
+  return await updateUser(user.id, {
+    isVerified: false,
+    verificationStatus: 'rejected',
+    verificationPhoto: null,
+    rejectionReason: reason
+  });
+}
+
+export async function revokeVerification(userId, reason = 'Верификация отменена администратором') {
+  const user = await getUser(userId);
+  if (!user) return null;
+  return await updateUser(user.id, {
+    isVerified: false,
+    verificationStatus: 'rejected',
+    verificationPhoto: null,
+    rejectionReason: reason
+  });
+}
+
+// Legacy db object for backward compatibility
+export const db = {
+  getUser, getUsers, createUser, updateUser, deleteUser,
+  addLike, blockUser, getSwipeFeed, getMatches,
+  getSwipeHistory, changeSwipeDecision,
+  addMessage, getMessages,
+  getAdminStats, getAllUsers, getPendingVerifications,
+  getVerifiedUsers, approveVerification, rejectVerification, revokeVerification
+};
