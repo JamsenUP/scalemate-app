@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Users, CheckCircle, Clock, Heart, Check, X, RefreshCw, AlertTriangle, Eye, Trash2 } from 'lucide-react';
 
-export default function AdminPanel({ API_URL, onBack }) {
+export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const [stats, setStats] = useState(null);
   const [allList, setAllList] = useState([]);
   const [pending, setPending] = useState([]);
@@ -20,6 +20,8 @@ export default function AdminPanel({ API_URL, onBack }) {
     const tgInit = window.Telegram?.WebApp?.initData;
     if (tgInit) {
       headers['x-tg-init-data'] = tgInit;
+    } else if (tgUserId) {
+      headers['x-dev-user-id'] = tgUserId;
     }
     return headers;
   };

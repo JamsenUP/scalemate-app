@@ -188,6 +188,7 @@ export default function App() {
         screenContent = (
           <AdminPanel 
             API_URL={API_URL} 
+            tgUserId={devUserId}
             onBack={() => setCurrentTab('profile')} 
           />
         );

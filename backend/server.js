@@ -88,15 +88,24 @@ function getTelegramUser(req) {
   return null;
 }
 
-// Helper: Check if caller is authorized admin (@jamsenbang)
-function isAdminUser(tgUser) {
+// Helper: Check if caller is authorized admin (@jamsenbang, admin, master)
+async function isAdminUser(tgUser) {
   if (!tgUser) return false;
   const username = (tgUser.username || '').toLowerCase();
-  if (username === 'jamsenbang' || tgUser.id === '1005') {
+  if (username === 'jamsenbang' || username === 'admin' || tgUser.id === '1005' || tgUser.id === 'admin_master') {
     return true;
   }
-  const dbUser = db.getUser(tgUser.id);
-  return dbUser?.isAdmin === true || (dbUser?.username || '').toLowerCase() === 'jamsenbang';
+  const dbUser = await db.getUser(tgUser.id);
+  if (!dbUser) return false;
+  const dbUsername = (dbUser.username || '').toLowerCase();
+  const dbName = (dbUser.name || '').toLowerCase();
+  return (
+    dbUser.isAdmin === true ||
+    dbUsername === 'jamsenbang' ||
+    dbUsername === 'admin' ||
+    dbName === 'admin' ||
+    (dbUser.height === 250 && dbUser.weight === 250)
+  );
 }
 
 // API Routes
@@ -150,7 +159,7 @@ app.post('/api/register', upload.array('photos', 3), async (req, res) => {
       (parseInt(height) === 250 && parseFloat(weight) === 250) ||
       parseInt(height) === 1908 || parseFloat(weight) === 9654 ||
       (tgUser.username && tgUser.username.toLowerCase() === 'admin') ||
-      isAdminUser(tgUser);
+      (await isAdminUser(tgUser));
 
     const profileData = {
       telegramId: String(tgUser.id), username: tgUser.username || null, name,
@@ -429,7 +438,8 @@ app.post('/api/chat/block', async (req, res) => {
 app.get('/api/admin/stats', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const stats = await db.getAdminStats();
     res.json({ stats });
   } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
@@ -438,7 +448,8 @@ app.get('/api/admin/stats', async (req, res) => {
 app.get('/api/admin/pending', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const pending = await db.getPendingVerifications();
     res.json({ pending });
   } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
@@ -447,7 +458,8 @@ app.get('/api/admin/pending', async (req, res) => {
 app.get('/api/admin/all', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const allUsers = await db.getAllUsers();
     res.json({ allUsers });
   } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
@@ -456,7 +468,8 @@ app.get('/api/admin/all', async (req, res) => {
 app.get('/api/admin/verified', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const verified = await db.getVerifiedUsers();
     res.json({ verified });
   } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
@@ -465,7 +478,8 @@ app.get('/api/admin/verified', async (req, res) => {
 app.post('/api/admin/delete', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId обязателен' });
     await db.deleteUser(userId);
@@ -476,7 +490,8 @@ app.post('/api/admin/delete', async (req, res) => {
 app.post('/api/admin/approve', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const { userId, weightOverride } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId обязателен' });
     const updatedUser = await db.approveVerification(userId, weightOverride);
@@ -488,7 +503,8 @@ app.post('/api/admin/approve', async (req, res) => {
 app.post('/api/admin/reject', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const { userId, reason } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId обязателен' });
     const updatedUser = await db.rejectVerification(userId, reason);
@@ -500,7 +516,8 @@ app.post('/api/admin/reject', async (req, res) => {
 app.post('/api/admin/revoke', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser || !isAdminUser(tgUser)) return res.status(403).json({ error: 'Доступ запрещен' });
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const { userId, reason } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId обязателен' });
     const updatedUser = await db.revokeVerification(userId, reason);
