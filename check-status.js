@@ -32,17 +32,20 @@ function graphql(query, variables = {}) {
 
 async function check() {
   const res = await graphql(`
-    query getServiceInstance($serviceId: String!, $environmentId: String!) {
-      serviceInstance(serviceId: $serviceId, environmentId: $environmentId) {
-        id
-        serviceId
-        environmentId
-        startCommand
+    query getDeployments($projectId: String!, $environmentId: String!) {
+      deployments(input: { projectId: $projectId, environmentId: $environmentId }, first: 1) {
+        edges {
+          node {
+            id
+            status
+            createdAt
+          }
+        }
       }
     }
-  `, { serviceId: "6cf1e3c0-81df-4622-b6c3-1fe665efadd6", environmentId: "6c92f56b-8e39-404a-a6af-7d1eb1c4d124" });
+  `, { projectId, environmentId: "6c92f56b-8e39-404a-a6af-7d1eb1c4d124" });
 
-  console.log('ServiceInstance Details:', JSON.stringify(res, null, 2));
+  console.log('Latest Deployment:', JSON.stringify(res, null, 2));
 }
 
 check();
