@@ -1,9 +1,32 @@
 import pg from 'pg';
 const { Pool } = pg;
 
+function fixSupabaseUrl(url) {
+  if (!url) return url;
+  if (url.includes('.supabase.co')) {
+    const match = url.match(/db\.([a-z0-9]+)\.supabase\.co/);
+    if (match) {
+      const projectRef = match[1];
+      let fixed = url
+        .replace(`db.${projectRef}.supabase.co:5432`, `aws-0-eu-central-1.pooler.supabase.com:5432`)
+        .replace(`db.${projectRef}.supabase.co:6543`, `aws-0-eu-central-1.pooler.supabase.com:5432`)
+        .replace(`db.${projectRef}.supabase.co`, `aws-0-eu-central-1.pooler.supabase.com:5432`);
+      
+      if (!fixed.includes(`postgres.${projectRef}`)) {
+        fixed = fixed.replace('postgresql://postgres:', `postgresql://postgres.${projectRef}:`);
+      }
+      return fixed;
+    }
+  }
+  return url;
+}
+
+const connectionString = fixSupabaseUrl(process.env.DATABASE_URL);
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  connectionString,
+  ssl: { rejectUnauthorized: false },
+  connectionTimeoutMillis: 10000
 });
 
 // Initialize tables on startup

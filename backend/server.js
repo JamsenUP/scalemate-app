@@ -553,14 +553,15 @@ if (fs.existsSync(frontendBuildPath)) {
 }
 
 // Start Server
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`ScaleMate backend running at http://localhost:${PORT}`);
-    startBot();
+app.listen(PORT, () => {
+  console.log(`ScaleMate backend running at http://localhost:${PORT}`);
+  startBot();
+
+  initDB().then(() => {
+    console.log('PostgreSQL database initialized successfully');
+  }).catch(err => {
+    console.error('Database init warning (non-fatal):', err);
   });
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
-  process.exit(1);
 });
 
 
