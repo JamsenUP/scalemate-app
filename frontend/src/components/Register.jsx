@@ -208,50 +208,44 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <div className="input-group">
-              <span className="input-label"><Calendar size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Возраст *</span>
-              <input 
-                type="number" 
-                name="age"
-                placeholder="18+" 
-                className="input-field" 
-                value={formData.age}
-                onChange={handleInputChange}
-                min="18"
-                max="100"
-                required 
-              />
-            </div>
-            
-            <div className="input-group">
-              <span className="input-label"><Ruler size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Рост (см) *</span>
-              <input 
-                type="number" 
-                name="height"
-                placeholder="170" 
-                className="input-field" 
-                value={formData.height}
-                onChange={handleInputChange}
-                min="100"
-                max="250"
-                required 
-              />
-            </div>
+          <div className="input-group">
+            <span className="input-label"><Calendar size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Возраст *</span>
+            <input 
+              type="text"
+              inputMode="numeric"
+              name="age"
+              placeholder="18+" 
+              className="input-field" 
+              value={formData.age}
+              onChange={handleInputChange}
+              required 
+            />
+          </div>
+          
+          <div className="input-group">
+            <span className="input-label"><Ruler size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Рост (см) *</span>
+            <input 
+              type="text"
+              inputMode="numeric"
+              name="height"
+              placeholder="170" 
+              className="input-field" 
+              value={formData.height}
+              onChange={handleInputChange}
+              required 
+            />
           </div>
 
           <div className="input-group">
             <span className="input-label"><Scale size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваш Вес (кг) *</span>
             <input 
-              type="number" 
+              type="text"
+              inputMode="decimal"
               name="weight"
               placeholder="70.5" 
               className="input-field" 
               value={formData.weight}
               onChange={handleInputChange}
-              min="30"
-              max="300"
-              step="0.1"
               required 
             />
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '-4px' }}>
@@ -259,22 +253,21 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-            <div className="input-group">
-              <span className="input-label">Ваш пол</span>
-              <select name="gender" className="input-field" value={formData.gender} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
-                <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женский</option>
-                <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужской</option>
-              </select>
-            </div>
-            <div className="input-group">
-              <span className="input-label"><Heart size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ищу кого</span>
-              <select name="preferredGender" className="input-field" value={formData.preferredGender} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
-                <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужчин</option>
-                <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женщин</option>
-                <option value="all" style={{ background: 'var(--bg-secondary)' }}>Всех</option>
-              </select>
-            </div>
+          <div className="input-group">
+            <span className="input-label">Ваш пол</span>
+            <select name="gender" className="input-field" value={formData.gender} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
+              <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женский</option>
+              <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужской</option>
+            </select>
+          </div>
+
+          <div className="input-group">
+            <span className="input-label"><Heart size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Кого ищете</span>
+            <select name="preferredGender" className="input-field" value={formData.preferredGender} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
+              <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужчин</option>
+              <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женщин</option>
+              <option value="all" style={{ background: 'var(--bg-secondary)' }}>Всех</option>
+            </select>
           </div>
 
           <div className="input-group">

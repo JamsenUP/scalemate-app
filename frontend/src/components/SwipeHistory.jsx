@@ -10,13 +10,22 @@ export default function SwipeHistory({ API_URL, tgUserId, onBack }) {
     fetchHistory();
   }, []);
 
+  const getAuthHeaders = () => {
+    const headers = {};
+    const tgInit = window.Telegram?.WebApp?.initData;
+    if (tgInit) {
+      headers['x-tg-init-data'] = tgInit;
+    } else {
+      headers['x-dev-user-id'] = tgUserId;
+    }
+    return headers;
+  };
+
   const fetchHistory = async () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/swipe-history`, {
-        headers: {
-          'x-dev-user-id': tgUserId
-        }
+        headers: getAuthHeaders()
       });
       const result = await response.json();
       if (response.ok) {
@@ -36,7 +45,7 @@ export default function SwipeHistory({ API_URL, tgUserId, onBack }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-dev-user-id': tgUserId
+          ...getAuthHeaders()
         },
         body: JSON.stringify({ targetUserId, newAction })
       });

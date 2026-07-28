@@ -1,8 +1,12 @@
 node_modules
 .env
 dist
-uploads/*.jpg
-uploads/*.png
-uploads/*.jpeg
-uploads/*.webp
+backend/uploads/*
+!backend/uploads/alice.jpg
+!backend/uploads/bob.jpg
+!backend/uploads/clara.jpg
+!backend/uploads/david.jpg
+!backend/uploads/app_preview.jpg
+!backend/uploads/app_preview_640x360.jpg
 .DS_Store
+project.tar.gz

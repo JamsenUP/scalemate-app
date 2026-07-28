@@ -1,9 +1,18 @@
-import React from 'react';
-import { Scale, Ruler, CheckCircle2, ShieldAlert, AlertCircle, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { Scale, Ruler, CheckCircle2, ShieldAlert, AlertCircle, LogOut, Edit3, Camera, Save, X } from 'lucide-react';
 
-export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, API_URL }) {
-
-
+export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, onUpdateUser, API_URL }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    name: user.name || '',
+    age: user.age || '',
+    height: user.height || '',
+    bio: user.bio || '',
+    preferredGender: user.preferredGender || 'male'
+  });
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // Determine BMI Category and Color
   const getBmiDetails = (bmi) => {
@@ -16,10 +25,167 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
 
   const bmiDetails = getBmiDetails(user.bmi);
 
+  const getAuthHeaders = () => {
+    const headers = {};
+    const tgInit = window.Telegram?.WebApp?.initData;
+    if (tgInit) {
+      headers['x-tg-init-data'] = tgInit;
+    }
+    return headers;
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+
+    try {
+      const data = new FormData();
+      data.append('name', formData.name);
+      data.append('age', formData.age);
+      data.append('height', formData.height);
+      data.append('bio', formData.bio);
+      data.append('preferredGender', formData.preferredGender);
+
+      if (photoFiles.length > 0) {
+        photoFiles.forEach(file => data.append('photos', file));
+      }
+
+      const response = await fetch(`${API_URL}/api/profile/edit`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: data
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Не удалось сохранить профиль');
+      }
+
+      if (onUpdateUser && result.user) {
+        onUpdateUser(result.user);
+      }
+      setIsEditing(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="screen-container">
+    <div className="screen-container" style={{ paddingBottom: '90px' }}>
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
+
+      {/* Edit Profile Modal */}
+      {isEditing && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Edit3 color="var(--color-primary)" size={18} /> Редактировать Профиль
+              </h3>
+              <button onClick={() => setIsEditing(false)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {error && (
+              <div style={{ background: 'rgba(255, 95, 95, 0.1)', color: '#ff5f5f', padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
+                ⚠️ {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              
+              <div className="input-group">
+                <span className="input-label">Имя</span>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  value={formData.name} 
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  required 
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="input-group">
+                  <span className="input-label">Возраст</span>
+                  <input 
+                    type="text" 
+                    inputMode="numeric"
+                    className="input-field" 
+                    value={formData.age} 
+                    onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
+                    required 
+                  />
+                </div>
+
+                <div className="input-group">
+                  <span className="input-label">Рост (см)</span>
+                  <input 
+                    type="text" 
+                    inputMode="numeric"
+                    className="input-field" 
+                    value={formData.height} 
+                    onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
+                    required 
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <span className="input-label">Кого ищете</span>
+                <select 
+                  className="input-field" 
+                  value={formData.preferredGender} 
+                  onChange={(e) => setFormData(prev => ({ ...prev, preferredGender: e.target.value }))}
+                  style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}
+                >
+                  <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужчин</option>
+                  <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женщин</option>
+                  <option value="all" style={{ background: 'var(--bg-secondary)' }}>Всех</option>
+                </select>
+              </div>
+
+              <div className="input-group">
+                <span className="input-label">О себе (Статус)</span>
+                <textarea 
+                  className="input-field" 
+                  rows={3}
+                  value={formData.bio} 
+                  onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
+                  placeholder="Расскажите о своих увлечениях..."
+                  style={{ resize: 'none' }}
+                />
+              </div>
+
+              <div className="input-group">
+                <span className="input-label"><Camera size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Загрузить новый Аватар</span>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => setPhotoFiles(Array.from(e.target.files))}
+                  className="input-field"
+                  style={{ padding: '8px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setIsEditing(false)} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>
+                  Отмена
+                </button>
+                <button type="submit" disabled={saving} className="btn" style={{ flex: 2, padding: '12px' }}>
+                  <Save size={16} /> {saving ? 'Сохранение...' : 'Сохранить'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div style={{ zIndex: 1, position: 'relative', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
@@ -48,77 +214,69 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
             </p>
           </div>
 
-          {/* Verification Status Badge */}
+          <button 
+            onClick={() => setIsEditing(true)} 
+            className="btn" 
+            style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '20px', gap: '6px' }}
+          >
+            <Edit3 size={14} /> Редактировать Профиль
+          </button>
+
+          {/* Verification Badge Status */}
           {user.isVerified ? (
-            <div className="badge-verified" style={{ padding: '6px 12px', fontSize: '12px', gap: '8px', boxShadow: 'var(--shadow-accent)' }}>
-              <CheckCircle2 size={14} /> Вес Верифицирован
+            <div className="badge-verified" style={{ padding: '6px 14px', fontSize: '12px' }}>
+              <CheckCircle2 size={14} strokeWidth={2.5} /> Вес {user.weight} кг Верифицирован
             </div>
           ) : (
-            <div style={{ background: 'rgba(255, 95, 95, 0.1)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '6px 12px', borderRadius: '30px', fontSize: '12px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <ShieldAlert size={14} /> Требуется Верификация
+            <div style={{ background: 'rgba(255, 183, 3, 0.15)', border: '1px solid rgba(255, 183, 3, 0.3)', color: '#ffb703', padding: '6px 14px', borderRadius: '30px', fontSize: '12px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <AlertCircle size={14} /> На проверке верификации
             </div>
           )}
         </div>
 
-        {/* Physical Stats Section */}
-        <div className="glass" style={{ padding: '20px', borderRadius: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-primary)' }}>
-              <Ruler size={20} />
+        {/* Verification & Parameters Details */}
+        <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+            Ваши параметры тела
+          </h3>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Ruler color="var(--color-secondary)" size={20} />
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Рост</span>
+                <strong style={{ fontSize: '15px' }}>{user.height} см</strong>
+              </div>
             </div>
-            <div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>РОСТ</span>
-              <strong style={{ fontSize: '16px' }}>{user.height} см</strong>
+
+            <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Scale color="var(--color-primary)" size={20} />
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Вес</span>
+                <strong style={{ fontSize: '15px' }}>{user.weight} кг</strong>
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-secondary)' }}>
-              <Scale size={20} />
-            </div>
+          <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>ВЕС</span>
-              <strong style={{ fontSize: '16px' }}>{user.weight} кг</strong>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Индекс Массы Тела (ИМТ)</span>
+              <strong style={{ fontSize: '16px', color: bmiDetails.color }}>{user.bmi || '—'}</strong>
             </div>
+            <span style={{ fontSize: '12px', color: bmiDetails.color, background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '20px', fontWeight: '600' }}>
+              {bmiDetails.label}
+            </span>
           </div>
         </div>
 
-        {/* BMI Section */}
-        <div className="glass" style={{ padding: '20px', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span className="input-label" style={{ fontSize: '12px' }}>Индекс Массы Тела (ИМТ)</span>
-            <strong style={{ fontSize: '22px', fontFamily: 'var(--font-display)', color: bmiDetails.color }}>
-              {user.bmi || '—'}
-            </strong>
-          </div>
-          
-          <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
-            <div 
-              style={{ 
-                height: '100%', 
-                width: user.bmi ? `${Math.min(Math.max((user.bmi - 15) * 4, 5), 100)}%` : '0%', 
-                background: bmiDetails.color,
-                borderRadius: '3px',
-                transition: 'width 0.5s ease'
-              }}
-            ></div>
-          </div>
+        {/* Account Actions Group */}
+        <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+            Настройки Аккаунта
+          </h3>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
-            <span>18.5 (Дефицит)</span>
-            <span style={{ color: '#00f5d4', fontWeight: 'bold' }}>{bmiDetails.label}</span>
-            <span>25.0 (Избыток)</span>
-          </div>
-        </div>
-
-        {/* Monetization / Action Cards */}
-        <div className="glass-premium" style={{ padding: '20px', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <h4 style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <AlertCircle size={16} /> Правила ScaleMate
-          </h4>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
             Мы заботимся об актуальности данных. Вы можете обновить свой вес бесплатно раз в 30 дней.
-            Если вы хотите пройти переверификацию веса раньше, вы можете воспользоваться моментальным обновлением.
           </p>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -151,6 +309,11 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
             )}
 
             {onOpenAdmin && (
+              user?.isAdmin === true ||
+              user?.username?.toLowerCase() === 'jamsenbang' ||
+              user?.telegramUsername?.toLowerCase() === 'jamsenbang' ||
+              window.Telegram?.WebApp?.initDataUnsafe?.user?.username?.toLowerCase() === 'jamsenbang'
+            ) && (
               <button 
                 onClick={onOpenAdmin}
                 className="btn btn-accent"
@@ -161,22 +324,6 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
             )}
           </div>
         </div>
-
-
-        {/* Test Control / Reset Profile */}
-        <button 
-          onClick={onResetProfile}
-          className="btn"
-          style={{ 
-            marginTop: '10px', 
-            background: 'rgba(255, 95, 95, 0.1)', 
-            border: '1px solid rgba(255, 95, 95, 0.2)', 
-            boxShadow: 'none', 
-            color: '#ff5f5f' 
-          }}
-        >
-          <LogOut size={16} /> Сбросить профиль (для теста)
-        </button>
 
       </div>
     </div>

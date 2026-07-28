@@ -31,29 +31,41 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-body {
+html, body {
   background-color: var(--bg-primary);
   color: var(--text-main);
   font-family: var(--font-sans);
-  overflow-x: hidden;
-  height: 100vh;
-  width: 100vw;
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
+  -webkit-text-size-adjust: 100%;
 }
 
 #root {
   width: 100%;
   max-width: 480px; /* Target mobile screen sizes */
-  height: 100vh;
+  height: 100%;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   position: relative;
+  margin: 0 auto;
   background-color: var(--bg-primary);
   border-left: 1px solid rgba(255, 255, 255, 0.03);
   border-right: 1px solid rgba(255, 255, 255, 0.03);
-  overflow: hidden;
+  overflow-x: hidden !important;
+  overflow-y: hidden;
+  overscroll-behavior-x: none;
+  box-sizing: border-box;
 }
 
 /* Glassmorphism Styles */
@@ -86,9 +98,14 @@ h1, h2, h3, .brand-font {
   flex-direction: column;
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
   padding-bottom: 90px; /* Leave space for navigation */
   position: relative;
   height: 100%;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .screen-container::-webkit-scrollbar {
@@ -103,25 +120,26 @@ h1, h2, h3, .brand-font {
 /* Gradient Background Mesh */
 .bg-mesh {
   position: absolute;
-  width: 300px;
-  height: 300px;
+  width: 260px;
+  height: 260px;
   border-radius: 50%;
   filter: blur(80px);
   z-index: 0;
   pointer-events: none;
   opacity: 0.15;
+  max-width: 100%;
 }
 
 .mesh-1 {
   background: var(--color-primary);
-  top: -100px;
-  left: -50px;
+  top: -80px;
+  left: 0;
 }
 
 .mesh-2 {
   background: var(--color-secondary);
-  bottom: 100px;
-  right: -50px;
+  bottom: 80px;
+  right: 0;
 }
 
 /* Premium Inputs */
@@ -277,18 +295,50 @@ h1, h2, h3, .brand-font {
 
 .swipe-card {
   position: absolute;
-  width: 90%;
-  height: 80vh;
-  max-height: 520px;
+  width: 92%;
+  height: 75vh;
+  max-height: 440px;
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   cursor: grab;
-  transition: transform 0.4s ease;
+  transition: transform 0.15s ease-out;
+  touch-action: none;
+  user-select: none;
 }
 
 .swipe-card:active {
   cursor: grabbing;
+}
+
+.swipe-badge {
+  position: absolute;
+  top: 25px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 22px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  z-index: 50;
+  pointer-events: none;
+  border: 3px solid;
+}
+
+.swipe-badge.like {
+  right: 25px;
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: rgba(0, 245, 212, 0.2);
+  transform: rotate(15deg);
+}
+
+.swipe-badge.dislike {
+  left: 25px;
+  color: #ff5f5f;
+  border-color: #ff5f5f;
+  background: rgba(255, 95, 95, 0.2);
+  transform: rotate(-15deg);
 }
 
 .card-image {
@@ -313,10 +363,10 @@ h1, h2, h3, .brand-font {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   z-index: 10;
 }
 
@@ -339,14 +389,16 @@ h1, h2, h3, .brand-font {
 .swipe-buttons {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  padding: 15px 0;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0 12px 0;
   z-index: 10;
+  margin-bottom: 5px;
 }
 
 .swipe-btn {
-  width: 60px;
-  height: 60px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -362,21 +414,23 @@ h1, h2, h3, .brand-font {
 }
 
 .swipe-btn.dislike {
-  background: rgba(255, 95, 95, 0.1);
-  border: 1px solid rgba(255, 95, 95, 0.3);
+  background: rgba(255, 95, 95, 0.12);
+  border: 1px solid rgba(255, 95, 95, 0.35);
   color: #ff5f5f;
 }
 
 .swipe-btn.like {
-  background: rgba(0, 245, 212, 0.1);
-  border: 1px solid rgba(0, 245, 212, 0.3);
+  background: rgba(0, 245, 212, 0.12);
+  border: 1px solid rgba(0, 245, 212, 0.35);
   color: var(--color-accent);
 }
 
-.swipe-btn.super-like {
-  background: rgba(138, 43, 226, 0.1);
-  border: 1px solid rgba(138, 43, 226, 0.3);
-  color: var(--color-secondary);
+.swipe-btn.message {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+  width: 48px;
+  height: 48px;
 }
 
 /* Match Screen Overlay */

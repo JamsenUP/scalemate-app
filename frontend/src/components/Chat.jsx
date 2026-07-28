@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowLeft, MessageSquare, Scale, CheckCircle2 } from 'lucide-react';
+import { Send, ArrowLeft, MessageSquare, Scale, CheckCircle2, UserX } from 'lucide-react';
 
 export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClearActivePartner }) {
   const [matches, setMatches] = useState([]);
@@ -24,13 +24,46 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
     }
   }, [activePartnerId, matches]);
 
+  const getAuthHeaders = () => {
+    const headers = {};
+    const tgInit = window.Telegram?.WebApp?.initData;
+    if (tgInit) {
+      headers['x-tg-init-data'] = tgInit;
+    } else {
+      headers['x-dev-user-id'] = tgUserId;
+    }
+    return headers;
+  };
+
+  const handleBlockUser = async (targetUserId, targetName) => {
+    if (!window.confirm(`Вы действительно хотите заблокировать ${targetName}? Этот пользователь больше не сможет вам писать.`)) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/chat/block`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ targetUserId })
+      });
+
+      if (response.ok) {
+        alert(`${targetName} заблокирован. Диалог завершен.`);
+        setActiveChat(null);
+        if (onClearActivePartner) onClearActivePartner();
+        fetchMatches();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchMatches = async () => {
     setLoadingMatches(true);
     try {
       const response = await fetch(`${API_URL}/api/matches`, {
-        headers: {
-          'x-dev-user-id': tgUserId
-        }
+        headers: getAuthHeaders()
       });
       const result = await response.json();
       if (response.ok) {
@@ -54,9 +87,7 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
   const fetchMessages = async (chatId) => {
     try {
       const response = await fetch(`${API_URL}/api/chats/${chatId}`, {
-        headers: {
-          'x-dev-user-id': tgUserId
-        }
+        headers: getAuthHeaders()
       });
       const result = await response.json();
       if (response.ok) {
@@ -109,7 +140,7 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-dev-user-id': tgUserId
+          ...getAuthHeaders()
         },
         body: JSON.stringify({ text: textToSend })
       });
@@ -157,6 +188,26 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
             </div>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>В сети</span>
           </div>
+
+          <button 
+            onClick={() => handleBlockUser(partner.id, partner.name)}
+            title="Заблокировать (Не писать мне больше)"
+            style={{
+              background: 'rgba(255, 95, 95, 0.12)',
+              border: '1px solid rgba(255, 95, 95, 0.3)',
+              color: '#ff5f5f',
+              padding: '6px 10px',
+              borderRadius: '20px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              fontWeight: '600'
+            }}
+          >
+            <UserX size={14} /> Не писать больше
+          </button>
         </div>
 
         {/* Message Area */}

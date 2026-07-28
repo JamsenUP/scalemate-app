@@ -53,6 +53,7 @@ class Database {
     const newUser = {
       id: user.telegramId || String(Date.now()),
       telegramId: user.telegramId || null,
+      username: user.username || user.telegramUsername || null,
       name: user.name || 'Аноним',
       age: parseInt(user.age) || 18,
       gender: user.gender || 'female',
@@ -125,6 +126,34 @@ class Database {
       return !!mutualLike; // returns true if it's a match!
     }
     return false;
+  }
+
+  blockUser(userId, targetUserId) {
+    const userIdStr = String(userId);
+    const targetIdStr = String(targetUserId);
+
+    // Remove likes/matches between these two
+    this.data.likes = this.data.likes.filter(
+      l => !(
+        (l.fromId === userIdStr && l.toId === targetIdStr) ||
+        (l.fromId === targetIdStr && l.toId === userIdStr)
+      )
+    );
+
+    // Remove messages
+    const chatId = [userIdStr, targetIdStr].sort().join('_');
+    this.data.messages = this.data.messages.filter(m => m.chatId !== chatId);
+
+    // Record dislike block so target never appears in feed again
+    this.data.likes.push({
+      fromId: userIdStr,
+      toId: targetIdStr,
+      type: 'dislike',
+      timestamp: new Date().toISOString()
+    });
+
+    this.save();
+    return true;
   }
 
   // Get potential profiles for swipes (excluding self, already liked/disliked, and only verified if user requires it)
@@ -231,7 +260,7 @@ class Database {
 
   getPendingVerifications() {
     return this.data.users
-      .filter(u => !u.isVerified && u.verificationPhoto)
+      .filter(u => !u.isVerified && u.verificationStatus === 'pending_moderation')
       .map(u => ({
         user: u,
         photo: u.verificationPhoto,
@@ -241,12 +270,25 @@ class Database {
       }));
   }
 
+  getVerifiedUsers() {
+    return this.data.users
+      .filter(u => u.isVerified)
+      .map(u => ({
+        user: u,
+        photo: u.verificationPhoto,
+        selfie: u.verificationSelfie,
+        claimedWeight: u.weight,
+        verifiedAt: u.verificationDate || u.createdAt
+      }));
+  }
+
   approveVerification(userId, weightOverride = null) {
     const user = this.getUser(userId);
     if (user) {
       const finalWeight = weightOverride ? parseFloat(weightOverride) : user.weight;
       return this.updateUser(user.id, {
         isVerified: true,
+        verificationStatus: 'approved',
         weight: finalWeight,
         verificationDate: new Date().toISOString()
       });
@@ -259,6 +301,21 @@ class Database {
     if (user) {
       return this.updateUser(user.id, {
         isVerified: false,
+        verificationStatus: 'rejected',
+        verificationPhoto: null,
+        rejectionReason: reason
+      });
+    }
+    return null;
+  }
+
+  revokeVerification(userId, reason = 'Верификация отменена администратором @jamsenbang') {
+    const user = this.getUser(userId);
+    if (user) {
+      return this.updateUser(user.id, {
+        isVerified: false,
+        verificationStatus: 'rejected',
+        verificationPhoto: null,
         rejectionReason: reason
       });
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, X, Star, Sparkles, Scale, Info, Check, ShieldAlert, Sliders, RotateCcw } from 'lucide-react';
+import { Heart, X, MessageSquare, Scale, Check, Sliders, RotateCcw, Send, Sparkles, ShieldAlert } from 'lucide-react';
 
 export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   const [feed, setFeed] = useState([]);
@@ -19,19 +19,37 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   // Match state
   const [matchData, setMatchData] = useState(null);
 
+  // Swipe drag gesture states
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  
+  // Direct Message modal state
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [directMsgText, setDirectMsgText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   useEffect(() => {
     fetchFeed();
   }, []);
+
+  const getAuthHeaders = () => {
+    const headers = {};
+    const tgInit = window.Telegram?.WebApp?.initData;
+    if (tgInit) {
+      headers['x-tg-init-data'] = tgInit;
+    } else {
+      headers['x-dev-user-id'] = tgUserId;
+    }
+    return headers;
+  };
 
   const fetchFeed = async () => {
     setLoading(true);
     setError('');
     try {
       const response = await fetch(`${API_URL}/api/feed`, {
-        headers: {
-          'x-dev-user-id': tgUserId
-        }
+        headers: getAuthHeaders()
       });
       
       const result = await response.json();
@@ -57,13 +75,14 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
     
     // Optimistically advance card
     setCurrentIndex(prev => prev + 1);
+    setDragOffset({ x: 0, y: 0 });
 
     try {
       const response = await fetch(`${API_URL}/api/like`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-dev-user-id': tgUserId
+          ...getAuthHeaders()
         },
         body: JSON.stringify({
           targetUserId: targetUser.id,
@@ -88,6 +107,70 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
     }
   };
 
+  // Touch & Mouse Drag Handlers
+  const handleTouchStart = (e) => {
+    const touch = e.touches ? e.touches[0] : e;
+    setIsDragging(true);
+    setStartPos({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const deltaX = touch.clientX - startPos.x;
+    const deltaY = touch.clientY - startPos.y;
+    setDragOffset({ x: deltaX, y: deltaY });
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+
+    if (dragOffset.x > 80) {
+      handleSwipe('like');
+    } else if (dragOffset.x < -80) {
+      handleSwipe('dislike');
+    } else {
+      setDragOffset({ x: 0, y: 0 });
+    }
+  };
+
+  const handleSendDirectMessage = async (e) => {
+    e.preventDefault();
+    if (!directMsgText.trim() || !currentCard) return;
+
+    setSendingMsg(true);
+    try {
+      const targetPartner = currentCard;
+
+      // 1. Like card first
+      await fetch(`${API_URL}/api/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ targetUserId: targetPartner.id, action: 'like' })
+      });
+
+      // 2. Send message directly
+      const chatId = [String(user.id), String(targetPartner.id)].sort().join('_');
+      await fetch(`${API_URL}/api/chats/${chatId}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ text: directMsgText })
+      });
+
+      setShowMessageModal(false);
+      setDirectMsgText('');
+      setCurrentIndex(prev => prev + 1);
+
+      // Navigate to chat directly
+      onNavigateToChat(targetPartner.id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="screen-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -109,15 +192,15 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>
             {error}
           </p>
-          <button onClick={fetchFeed} className="btn" style={{ padding: '12px 20px', fontSize: '14px' }}>
-            Попробовать снова
+          <button onClick={fetchFeed} className="btn btn-primary" style={{ padding: '10px 20px', fontSize: '14px' }}>
+            Обновить
           </button>
         </div>
       </div>
     );
   }
 
-  // Apply filter to feed
+  // Filter feed based on current filter state
   const filteredFeed = feed.filter(profile => {
     if (profile.weight < filters.minWeight || profile.weight > filters.maxWeight) return false;
     if (profile.height < filters.minHeight || profile.height > filters.maxHeight) return false;
@@ -128,44 +211,29 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   const currentCard = hasCards ? filteredFeed[currentIndex] : null;
 
   return (
-    <div className="screen-container" style={{ overflow: 'hidden', paddingBottom: '20px' }}>
+    <div className="screen-container" style={{ paddingBottom: '90px' }}>
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
 
       {/* Filter Modal */}
       {showFilters && (
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(10, 8, 19, 0.92)',
-          backdropFilter: 'blur(20px)',
-          zIndex: 500,
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          animation: 'fadeIn 0.3s ease'
-        }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-              <h2 style={{ fontSize: '22px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sliders color="var(--color-primary)" /> Фильтры поиска
-              </h2>
-              <button 
-                onClick={() => setShowFilters(false)}
-                style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
+        <div className="glass-premium" style={{ position: 'absolute', inset: 10, zIndex: 100, borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sliders color="var(--color-primary)" /> Настройки Поиска
+            </h3>
+            <button onClick={() => setShowFilters(false)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
+              Закрыть
+            </button>
+          </div>
 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', flex: 1, overflowY: 'auto' }}>
             {/* Weight Slider Group */}
-            <div className="glass-premium" style={{ padding: '16px', borderRadius: '16px', marginBottom: '15px' }}>
+            <div className="glass-premium" style={{ padding: '16px', borderRadius: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <span className="input-label">Диапазон веса (кг)</span>
-                <strong style={{ color: 'var(--color-accent)' }}>{filters.minWeight} — {filters.maxWeight} кг</strong>
+                <strong style={{ color: 'var(--color-primary)' }}>{filters.minWeight} — {filters.maxWeight} кг</strong>
               </div>
-              
               <div style={{ display: 'flex', gap: '15px' }}>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Мин: {filters.minWeight} кг</span>
@@ -198,7 +266,6 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
                 <span className="input-label">Диапазон роста (см)</span>
                 <strong style={{ color: 'var(--color-secondary)' }}>{filters.minHeight} — {filters.maxHeight} см</strong>
               </div>
-              
               <div style={{ display: 'flex', gap: '15px' }}>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Мин: {filters.minHeight} см</span>
@@ -226,7 +293,6 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
             </div>
           </div>
 
-          {/* Filter Action Buttons */}
           <div style={{ display: 'flex', gap: '12px' }}>
             <button 
               onClick={() => {
@@ -296,9 +362,83 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
         </div>
       )}
 
-      {/* Card Deck Deck */}
+      {/* Direct Message Modal */}
+      {showMessageModal && currentCard && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <img 
+                src={API_URL + currentCard.photos[0]} 
+                alt={currentCard.name}
+                style={{ width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover' }}
+              />
+              <div>
+                <h3 style={{ fontSize: '18px' }}>Написать {currentCard.name}</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Прямое первое сообщение</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSendDirectMessage} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <textarea
+                placeholder={`Напишите приветственное сообщение для ${currentCard.name}...`}
+                value={directMsgText}
+                onChange={(e) => setDirectMsgText(e.target.value)}
+                rows={4}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '16px',
+                  padding: '12px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  outline: 'none',
+                  resize: 'none',
+                  fontFamily: 'inherit'
+                }}
+                autoFocus
+              />
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowMessageModal(false)}
+                  className="btn btn-secondary" 
+                  style={{ flex: 1, padding: '12px', fontSize: '13px' }}
+                >
+                  Отмена
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={sendingMsg || !directMsgText.trim()}
+                  className="btn" 
+                  style={{ flex: 2, padding: '12px', fontSize: '13px', background: 'linear-gradient(135deg, #a855f7, var(--color-primary))' }}
+                >
+                  <Send size={15} /> Отправить
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Main Deck Container */}
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', zIndex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 5px' }}>
+        
+        {/* Header Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 5px 10px 5px' }}>
           <span style={{ fontSize: '18px', fontWeight: '800', background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             ScaleMate
           </span>
@@ -329,11 +469,31 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
           </div>
         </div>
 
-
         {hasCards ? (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
+            {/* Swipeable Card Stack Container */}
             <div className="swipe-card-container">
-              <div className="swipe-card glass">
+              <div 
+                className="swipe-card glass"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleTouchStart}
+                onMouseMove={handleTouchMove}
+                onMouseUp={handleTouchEnd}
+                style={{
+                  transform: `translate3d(${dragOffset.x}px, ${dragOffset.y * 0.4}px, 0px) rotate(${dragOffset.x * 0.08}deg)`,
+                  transition: isDragging ? 'none' : 'transform 0.3s ease-out'
+                }}
+              >
+                {/* Swipe Badges Overlay */}
+                {dragOffset.x > 30 && (
+                  <div className="swipe-badge like">ЛАЙК</div>
+                )}
+                {dragOffset.x < -30 && (
+                  <div className="swipe-badge dislike">ПРОПУСК</div>
+                )}
+
                 <img 
                   src={API_URL + currentCard.photos[0]} 
                   alt={currentCard.name} 
@@ -349,7 +509,7 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                    <h2 style={{ fontSize: '26px' }}>{currentCard.name}, {currentCard.age}</h2>
+                    <h2 style={{ fontSize: '24px' }}>{currentCard.name}, {currentCard.age}</h2>
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: 'var(--text-muted)' }}>
@@ -358,19 +518,28 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
                     <span>Вес: {currentCard.weight} кг</span>
                   </div>
 
-                  <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4', marginTop: '5px' }}>
+                  <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4', marginTop: '3px' }}>
                     {currentCard.bio || 'Нет описания'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Swipes Controller Buttons */}
+            {/* Swipes Controller Buttons (Dislike - Direct Message - Like) */}
             <div className="swipe-buttons">
-              <button onClick={() => handleSwipe('dislike')} className="swipe-btn dislike">
+              <button onClick={() => handleSwipe('dislike')} className="swipe-btn dislike" title="Пропустить">
                 <X size={26} />
               </button>
-              <button onClick={() => handleSwipe('like')} className="swipe-btn like">
+
+              <button 
+                onClick={() => setShowMessageModal(true)} 
+                className="swipe-btn message" 
+                title="Написать первое сообщение"
+              >
+                <MessageSquare size={22} />
+              </button>
+
+              <button onClick={() => handleSwipe('like')} className="swipe-btn like" title="Понравилось">
                 <Heart size={26} fill="currentColor" />
               </button>
             </div>

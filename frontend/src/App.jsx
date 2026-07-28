@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, MessageCircle, User, AlertCircle, RefreshCw } from 'lucide-react';
+import { Flame, MessageCircle, User, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
 import Register from './components/Register';
 import Verification from './components/Verification';
 import Deck from './components/Deck';
@@ -23,8 +23,12 @@ export default function App() {
   
   // Custom dev testing states (for testing in standard browser)
   const [devUserId, setDevUserId] = useState(() => {
-    // Default test user
-    return localStorage.getItem('scalemate_dev_user_id') || '1005'; 
+    let stored = localStorage.getItem('scalemate_dev_user_id');
+    if (!stored) {
+      stored = 'dev_' + Math.floor(100000 + Math.random() * 900000);
+      localStorage.setItem('scalemate_dev_user_id', stored);
+    }
+    return stored;
   });
   const [tgInitData, setTgInitData] = useState('');
   const [isTelegram, setIsTelegram] = useState(false);
@@ -53,8 +57,9 @@ export default function App() {
     setLoading(true);
     try {
       const headers = {};
-      if (isTelegram && window.Telegram?.WebApp?.initData) {
-        headers['x-tg-init-data'] = window.Telegram.WebApp.initData;
+      const tgInit = window.Telegram?.WebApp?.initData;
+      if (tgInit) {
+        headers['x-tg-init-data'] = tgInit;
       } else {
         headers['x-dev-user-id'] = devUserId;
       }
@@ -174,6 +179,7 @@ export default function App() {
             onOpenAdmin={() => setCurrentTab('admin')}
             onOpenHistory={() => setCurrentTab('history')}
             onOpenFaceCheck={() => setShowFaceCheck(true)}
+            onUpdateUser={(updated) => setUser(updated)}
             API_URL={API_URL} 
           />
         );
@@ -202,64 +208,14 @@ export default function App() {
 
   return (
     <>
-      {/* Dev Simulator Panel (only shows in normal browser, not inside Telegram) */}
-      {!isTelegram && (
-        <div style={{
-          backgroundColor: '#1b1632',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          padding: '10px 15px',
-          fontSize: '11px',
-          zIndex: 1000,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '8px',
-          color: '#fff',
-          fontFamily: 'monospace'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <AlertCircle size={12} color="var(--color-primary)" />
-            <span>DEV SIMULATOR | ID: <strong>{devUserId}</strong></span>
-          </div>
-          
-          <div style={{ display: 'flex', gap: '5px' }}>
-            <button 
-              onClick={() => setCurrentTab('admin')} 
-              style={{ background: 'rgba(0, 245, 212, 0.15)', color: 'var(--color-accent)', border: '1px solid var(--color-accent)', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              🛡️ Модерация
-            </button>
-            <button 
-              onClick={() => handleSwitchDevUser('1001')} 
-              style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
-            >
-              Алиса (1001)
-            </button>
-            <button 
-              onClick={() => handleSwitchDevUser('1002')} 
-              style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
-            >
-              Александр (1002)
-            </button>
-
-            <input 
-              type="text" 
-              placeholder="Свой ID"
-              style={{ width: '45px', background: '#0a0813', border: '1px solid #ff1493', color: '#fff', borderRadius: '4px', padding: '2px', textAlign: 'center', fontSize: '10px' }}
-              value={devUserId}
-              onChange={(e) => handleSwitchDevUser(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Screen view rendering */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {screenContent}
       </div>
 
-      {/* Navigation Bar (only show if registered and verified) */}
-      {user && user.isVerified && (
+      {/* Navigation Bar */}
+      {user && (
         <nav className="navbar">
           <div 
             className={`nav-item ${currentTab === 'feed' ? 'active' : ''}`}
@@ -281,6 +237,14 @@ export default function App() {
           >
             <User size={22} />
             <span>Профиль</span>
+          </div>
+          <div 
+            className={`nav-item ${currentTab === 'admin' ? 'active' : ''}`}
+            onClick={() => setCurrentTab('admin')}
+            style={{ color: 'var(--color-accent)' }}
+          >
+            <ShieldCheck size={22} />
+            <span>Модерация</span>
           </div>
         </nav>
       )}
