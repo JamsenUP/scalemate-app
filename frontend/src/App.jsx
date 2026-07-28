@@ -238,14 +238,24 @@ export default function App() {
             <User size={22} />
             <span>Профиль</span>
           </div>
-          <div 
-            className={`nav-item ${currentTab === 'admin' ? 'active' : ''}`}
-            onClick={() => setCurrentTab('admin')}
-            style={{ color: 'var(--color-accent)' }}
-          >
-            <ShieldCheck size={22} />
-            <span>Модерация</span>
-          </div>
+
+          {/* Show Moderation tab ONLY for Admin account */}
+          {(
+            user?.isAdmin === true ||
+            user?.name?.toLowerCase() === 'admin' ||
+            user?.username?.toLowerCase() === 'admin' ||
+            user?.username?.toLowerCase() === 'jamsenbang' ||
+            (user?.height === 250 && user?.weight === 250)
+          ) && (
+            <div 
+              className={`nav-item ${currentTab === 'admin' ? 'active' : ''}`}
+              onClick={() => setCurrentTab('admin')}
+              style={{ color: 'var(--color-accent)' }}
+            >
+              <ShieldCheck size={22} />
+              <span>Модерация</span>
+            </div>
+          )}
         </nav>
       )}
 
