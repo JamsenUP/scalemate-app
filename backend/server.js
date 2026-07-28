@@ -547,13 +547,37 @@ app.get('/api/admin/pending', (req, res) => {
   res.json({ pending });
 });
 
+app.get('/api/admin/all', (req, res) => {
+  const tgUser = getTelegramUser(req);
+  if (!tgUser || !isAdminUser(tgUser)) {
+    return res.status(403).json({ error: 'Доступ запрещен' });
+  }
+  const allUsers = db.getAllUsers();
+  res.json({ allUsers });
+});
+
 app.get('/api/admin/verified', (req, res) => {
   const tgUser = getTelegramUser(req);
   if (!tgUser || !isAdminUser(tgUser)) {
-    return res.status(403).json({ error: 'Доступ запрещен. Модерация доступна только администратору @jamsenbang' });
+    return res.status(403).json({ error: 'Доступ запрещен' });
   }
   const verified = db.getVerifiedUsers();
   res.json({ verified });
+});
+
+app.post('/api/admin/delete', (req, res) => {
+  const tgUser = getTelegramUser(req);
+  if (!tgUser || !isAdminUser(tgUser)) {
+    return res.status(403).json({ error: 'Доступ запрещен' });
+  }
+
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'userId обязателен' });
+  }
+
+  db.deleteUser(userId);
+  res.json({ success: true, message: 'Пользователь полностью удален' });
 });
 
 app.post('/api/admin/approve', (req, res) => {

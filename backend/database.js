@@ -270,6 +270,16 @@ class Database {
       }));
   }
 
+  getAllUsers() {
+    return this.data.users.map(u => ({
+      user: u,
+      photo: u.verificationPhoto || u.photos?.[0],
+      selfie: u.verificationSelfie,
+      claimedWeight: u.weight,
+      registeredAt: u.createdAt || u.verificationDate
+    }));
+  }
+
   getVerifiedUsers() {
     return this.data.users
       .filter(u => u.isVerified)
@@ -280,6 +290,15 @@ class Database {
         claimedWeight: u.weight,
         verifiedAt: u.verificationDate || u.createdAt
       }));
+  }
+
+  deleteUser(userId) {
+    const idStr = String(userId);
+    this.data.users = this.data.users.filter(u => String(u.id) !== idStr);
+    this.data.likes = this.data.likes.filter(l => String(l.fromId) !== idStr && String(l.toId) !== idStr);
+    this.data.messages = this.data.messages.filter(m => !m.chatId.includes(idStr));
+    this.save();
+    return true;
   }
 
   approveVerification(userId, weightOverride = null) {
