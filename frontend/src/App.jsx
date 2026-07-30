@@ -19,6 +19,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('feed'); // 'feed' | 'chats' | 'profile' | 'admin' | 'history'
   const [activePartnerId, setActivePartnerId] = useState(null);
   const [showFaceCheck, setShowFaceCheck] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   
   // Custom dev testing states (for testing in standard browser)
@@ -165,6 +166,7 @@ export default function App() {
             tgUserId={devUserId} 
             activePartnerId={activePartnerId}
             onClearActivePartner={() => setActivePartnerId(null)}
+            onChatOpenChange={(open) => setIsChatOpen(open)}
           />
         );
         break;
@@ -217,25 +219,25 @@ export default function App() {
       </div>
 
       {/* Navigation Bar */}
-      {user && (
+      {user && !isChatOpen && (
         <nav className="navbar">
           <div 
             className={`nav-item ${currentTab === 'feed' ? 'active' : ''}`}
-            onClick={() => setCurrentTab('feed')}
+            onClick={() => { setIsChatOpen(false); setCurrentTab('feed'); }}
           >
             <Flame size={22} />
             <span>Знакомства</span>
           </div>
           <div 
             className={`nav-item ${currentTab === 'chats' ? 'active' : ''}`}
-            onClick={() => setCurrentTab('chats')}
+            onClick={() => { setIsChatOpen(false); setCurrentTab('chats'); }}
           >
             <MessageCircle size={22} />
             <span>Чаты</span>
           </div>
           <div 
             className={`nav-item ${currentTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setCurrentTab('profile')}
+            onClick={() => { setIsChatOpen(false); setCurrentTab('profile'); }}
           >
             <User size={22} />
             <span>Профиль</span>
@@ -251,7 +253,7 @@ export default function App() {
           ) && (
             <div 
               className={`nav-item ${currentTab === 'admin' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('admin')}
+              onClick={() => { setIsChatOpen(false); setCurrentTab('admin'); }}
               style={{ color: 'var(--color-accent)' }}
             >
               <ShieldCheck size={22} />

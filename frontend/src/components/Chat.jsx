@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, ArrowLeft, MessageSquare, Scale, CheckCircle2, UserX, Heart, MessageCircle, HeartHandshake, X } from 'lucide-react';
 
-export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClearActivePartner }) {
+export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClearActivePartner, onChatOpenChange }) {
   const [matches, setMatches] = useState([]);
   const [incomingLikes, setIncomingLikes] = useState([]);
   const [activeChat, setActiveChat] = useState(null); // holds match object { user, chatId, lastMessage }
@@ -247,6 +247,7 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
 
   const handleBackToMatches = () => {
     setActiveChat(null);
+    if (onChatOpenChange) onChatOpenChange(false);
     if (onClearActivePartner) onClearActivePartner();
     loadAllData();
   };
@@ -340,7 +341,21 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
         </div>
 
         {/* Message Input Box */}
-        <form onSubmit={handleSendMessage} className="glass" style={{ padding: '15px', display: 'flex', gap: '10px', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <form 
+          onSubmit={handleSendMessage} 
+          className="glass" 
+          style={{ 
+            padding: '14px 16px', 
+            paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+            display: 'flex', 
+            gap: '10px', 
+            alignItems: 'center', 
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(16, 12, 28, 0.98)',
+            position: 'relative',
+            zIndex: 100
+          }}
+        >
           <input 
             type="text" 
             placeholder="Написать сообщение..." 
