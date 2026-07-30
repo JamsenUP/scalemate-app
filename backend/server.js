@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { db, initDB } from './database.js';
 import { verifyWeightWithAI, estimateBodyProportionsWithAI, verifyFaceMatchWithAI } from './verification.js';
-import { sendMatchNotification, startBot } from './bot.js';
+import { sendMatchNotification, sendChatMessageNotification, startBot } from './bot.js';
 
 dotenv.config();
 
@@ -406,6 +406,20 @@ app.post('/api/chats/:chatId/message', async (req, res) => {
     if (!chatMembers.includes(String(user.id))) return res.status(403).json({ error: 'Доступ к чату запрещен' });
 
     const newMessage = await db.addMessage(chatId, user.id, text);
+
+    // Send Telegram Bot notification to recipient partner
+    try {
+      const partnerId = chatMembers.find(id => String(id) !== String(user.id));
+      if (partnerId) {
+        const partnerUser = await db.getUser(partnerId);
+        if (partnerUser && partnerUser.telegramId) {
+          sendChatMessageNotification(partnerUser.telegramId, user.name, text);
+        }
+      }
+    } catch (notifErr) {
+      console.warn('Telegram notification warning (non-blocking):', notifErr?.message || notifErr);
+    }
+
     res.json({ success: true, message: newMessage });
   } catch (err) {
     console.error('POST /api/chats message error:', err);

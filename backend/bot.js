@@ -114,3 +114,30 @@ export async function sendMatchNotification(telegramId, partnerName) {
     console.error(`Failed to send Telegram notification to ${telegramId}:`, error);
   }
 }
+
+/**
+ * Sends a notification to a Telegram user when a new chat message arrives.
+ */
+export async function sendChatMessageNotification(telegramId, senderName, text) {
+  if (!bot || !telegramId) return;
+
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+
+  try {
+    const preview = text.length > 60 ? text.substring(0, 57) + '...' : text;
+    const notificationText = 
+      `💬 **Новое сообщение от ${senderName}:**\n\n` +
+      `«${preview}»\n\n` +
+      `Откройте ScaleMate, чтобы ответить! 👇`;
+
+    await bot.telegram.sendMessage(telegramId, notificationText, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.webApp('💬 Ответить в чате', appUrl)]
+      ])
+    });
+    console.log(`Chat notification sent to Telegram user ${telegramId}`);
+  } catch (error) {
+    console.error(`Failed to send Telegram chat notification to ${telegramId}:`, error?.message || error);
+  }
+}

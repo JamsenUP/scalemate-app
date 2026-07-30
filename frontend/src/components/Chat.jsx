@@ -103,7 +103,12 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
 
   // Set up polling for messages when chat is open
   useEffect(() => {
-    if (!activeChat) return;
+    if (!activeChat) {
+      const interval = setInterval(() => {
+        fetchMatches();
+      }, 4000);
+      return () => clearInterval(interval);
+    }
 
     const interval = setInterval(() => {
       fetchMessages(activeChat.chatId);
