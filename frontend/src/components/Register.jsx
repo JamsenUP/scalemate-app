@@ -26,7 +26,16 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'gender') {
+      const opposite = value === 'male' ? 'female' : 'male';
+      setFormData(prev => ({ 
+        ...prev, 
+        gender: value, 
+        preferredGender: opposite 
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handlePhotoChange = (e) => {
@@ -256,18 +265,12 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
           <div className="input-group">
             <span className="input-label">Ваш пол</span>
             <select name="gender" className="input-field" value={formData.gender} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
-              <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женский</option>
-              <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужской</option>
+              <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женский (Поиск Мужчин)</option>
+              <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужской (Поиск Женщин)</option>
             </select>
-          </div>
-
-          <div className="input-group">
-            <span className="input-label"><Heart size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Кого ищете</span>
-            <select name="preferredGender" className="input-field" value={formData.preferredGender} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
-              <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужчин</option>
-              <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женщин</option>
-              <option value="all" style={{ background: 'var(--bg-secondary)' }}>Всех</option>
-            </select>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              🔒 Поиск автоматически настроен на противоположный пол.
+            </span>
           </div>
 
           <div className="input-group">
@@ -313,7 +316,7 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
             className={`btn ${loading ? 'btn-disabled' : ''}`}
             disabled={loading}
           >
-            {loading ? 'Создание профиля...' : 'Далее: Подтвердить Вес'}
+            {loading ? 'Создание профиля...' : (formData.gender === 'female' ? 'Далее: Подтвердить Вес ⚖️' : 'Далее: Проверка Дохода 💰')}
           </button>
         </form>
       </div>
