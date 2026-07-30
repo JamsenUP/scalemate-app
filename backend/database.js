@@ -425,7 +425,7 @@ export async function getMessages(chatId) {
 export async function getAdminStats() {
   const totalRes = await pool.query(`SELECT COUNT(*) FROM users`);
   const verifiedRes = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = true`);
-  const pendingRes = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = false AND verification_photo IS NOT NULL`);
+  const pendingRes = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = false OR is_verified IS NULL`);
   const likesRes = await pool.query(`SELECT COUNT(*) FROM likes`);
   const msgRes = await pool.query(`SELECT COUNT(*) FROM messages`);
   return {
@@ -450,11 +450,11 @@ export async function getAllUsers() {
 
 export async function getPendingVerifications() {
   const res = await pool.query(
-    `SELECT * FROM users WHERE is_verified = false AND verification_status = 'pending_moderation' ORDER BY created_at DESC`
+    `SELECT * FROM users WHERE is_verified = false OR is_verified IS NULL ORDER BY created_at DESC`
   );
   return res.rows.map(row => ({
     user: rowToUser(row),
-    photo: row.verification_photo,
+    photo: row.verification_photo || (row.photos && row.photos[0]),
     selfie: row.verification_selfie,
     claimedWeight: row.weight,
     requestedAt: row.verification_date || row.created_at

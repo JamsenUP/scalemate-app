@@ -339,58 +339,64 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {pending.length === 0 ? (
               <div className="glass-premium" style={{ padding: '30px', textAlign: 'center', borderRadius: '24px', color: 'var(--text-muted)' }}>
-                Заявок на проверку веса пока нет.
+                Неверифицированных анкет пока нет.
               </div>
             ) : (
               pending.map((item, idx) => {
                 const u = item.user;
+                const getPhotoUrl = (p) => p ? (p.startsWith('http') ? p : API_URL + p) : null;
+                const scalePhotoUrl = getPhotoUrl(item.photo);
+                const selfiePhotoUrl = getPhotoUrl(item.selfie);
+
                 return (
                   <div key={idx} className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <img 
-                        src={u.photos?.[0] ? (u.photos[0].startsWith('http') ? u.photos[0] : (API_URL + u.photos[0])) : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'} 
+                        src={getPhotoUrl(u.photos?.[0]) || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'} 
                         alt={u.name}
-                        style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }}
+                        style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-primary)' }}
                       />
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <h4 style={{ fontSize: '18px' }}>{u.name}, {u.age}</h4>
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Заявленный вес: <strong style={{ color: 'var(--color-accent)' }}>{item.claimedWeight} кг</strong> | Рост: {u.height} см
+                          Вес: <strong style={{ color: 'var(--color-accent)' }}>{item.claimedWeight} кг</strong> | Рост: {u.height} см {u.username ? `| @${u.username}` : ''}
                         </p>
                       </div>
                     </div>
 
-                    {/* Scale and Selfie Photos Preview */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      {item.photo && (
-                        <div style={{ position: 'relative' }}>
-                          <img 
-                            src={API_URL + item.photo} 
-                            alt="Scale" 
-                            style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '12px', cursor: 'pointer' }}
-                            onClick={() => setPreviewPhoto(API_URL + item.photo)}
-                          />
-                          <span style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '6px', fontSize: '10px' }}>
-                            ⚖️ Фото весов
-                          </span>
-                        </div>
-                      )}
-                      {item.selfie && (
-                        <div style={{ position: 'relative' }}>
-                          <img 
-                            src={API_URL + item.selfie} 
-                            alt="Selfie" 
-                            style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '12px', cursor: 'pointer' }}
-                            onClick={() => setPreviewPhoto(API_URL + item.selfie)}
-                          />
-                          <span style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '6px', fontSize: '10px' }}>
-                            🤳 Селфи
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                    {/* Photos Preview */}
+                    {(scalePhotoUrl || selfiePhotoUrl) && (
+                      <div style={{ display: 'grid', gridTemplateColumns: selfiePhotoUrl ? '1fr 1fr' : '1fr', gap: '10px' }}>
+                        {scalePhotoUrl && (
+                          <div style={{ position: 'relative' }}>
+                            <img 
+                              src={scalePhotoUrl} 
+                              alt="Photo" 
+                              style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '12px', cursor: 'pointer' }}
+                              onClick={() => setPreviewPhoto(scalePhotoUrl)}
+                            />
+                            <span style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '6px', fontSize: '10px' }}>
+                              📸 Фото профиля / весов
+                            </span>
+                          </div>
+                        )}
+                        {selfiePhotoUrl && (
+                          <div style={{ position: 'relative' }}>
+                            <img 
+                              src={selfiePhotoUrl} 
+                              alt="Selfie" 
+                              style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '12px', cursor: 'pointer' }}
+                              onClick={() => setPreviewPhoto(selfiePhotoUrl)}
+                            />
+                            <span style={{ position: 'absolute', bottom: 5, left: 5, background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '6px', fontSize: '10px' }}>
+                              🤳 Селфи
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
                       <button 
                         onClick={() => handleReject(u.id)}
                         className="btn btn-secondary"
@@ -401,9 +407,17 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                       <button 
                         onClick={() => handleApprove(u.id)}
                         className="btn"
-                        style={{ flex: 1, padding: '10px', fontSize: '13px', background: 'linear-gradient(135deg, var(--color-accent), #00b4d8)', color: '#0a0813' }}
+                        style={{ flex: 2, padding: '10px', fontSize: '13px', background: 'linear-gradient(135deg, var(--color-accent), #00b4d8)', color: '#0a0813' }}
                       >
                         <Check size={16} /> Одобрить
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteUser(u.id, u.name)}
+                        className="btn btn-secondary"
+                        style={{ padding: '10px 12px', fontSize: '13px', border: '1px solid rgba(255, 59, 48, 0.5)', color: '#ff3b30' }}
+                        title="Удалить профиль"
+                      >
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
