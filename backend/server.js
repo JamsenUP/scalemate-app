@@ -116,7 +116,14 @@ app.get('/api/profile', async (req, res) => {
     const tgUser = getTelegramUser(req);
     if (!tgUser) return res.status(401).json({ error: 'Не авторизован (Telegram WebApp Session missing)' });
 
-    let user = await db.getUser(tgUser.id);
+    // Lookup user by Telegram ID OR Username
+    let user = await db.getUser(tgUser.id, tgUser.username);
+
+    // Sync telegram_id if user was matched by username on a new device/session
+    if (user && user.telegramId !== String(tgUser.id)) {
+      user = await db.updateUser(user.id, { telegramId: String(tgUser.id) });
+    }
+
     const isAdminSession = 
       (tgUser.username && (tgUser.username.toLowerCase() === 'admin' || tgUser.username.toLowerCase() === 'jamsenbang')) ||
       tgUser.id === 'admin_master' || tgUser.id === '1005';
@@ -139,6 +146,29 @@ app.get('/api/profile', async (req, res) => {
   } catch (err) {
     console.error('GET /api/profile error:', err);
     res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// 1.5 Direct Login by Username/Name/ID (for cross-device / web sessions)
+app.post('/api/login', async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(400).json({ error: 'Укажите Имя, Username или Telegram ID' });
+
+    const user = await db.getUserByQuery(query);
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден. Проверьте правильность данных.' });
+    }
+
+    const tgUser = getTelegramUser(req);
+    if (tgUser) {
+      await db.updateUser(user.id, { telegramId: String(tgUser.id) });
+    }
+
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error('POST /api/login error:', err);
+    res.status(500).json({ error: 'Ошибка при входе в аккаунт' });
   }
 });
 

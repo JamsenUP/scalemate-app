@@ -139,11 +139,35 @@ function rowToMessage(row) {
 
 // ─── User Methods ───────────────────────────────────────────────
 
-export async function getUser(id) {
-  const idStr = String(id);
+export async function getUser(id, username = null) {
+  if (!id && !username) return null;
+  const idStr = id ? String(id) : '';
+  const uname = username ? String(username).toLowerCase().replace('@', '') : '';
+
   const res = await pool.query(
-    `SELECT * FROM users WHERE id = $1 OR telegram_id = $1 LIMIT 1`,
-    [idStr]
+    `SELECT * FROM users 
+     WHERE (id = $1 AND $1 != '') 
+        OR (telegram_id = $1 AND $1 != '') 
+        OR (LOWER(username) = $2 AND $2 != '') 
+     ORDER BY is_verified DESC, created_at DESC 
+     LIMIT 1`,
+    [idStr, uname]
+  );
+  return rowToUser(res.rows[0]);
+}
+
+export async function getUserByQuery(queryStr) {
+  if (!queryStr) return null;
+  const q = String(queryStr).trim().toLowerCase().replace('@', '');
+  const res = await pool.query(
+    `SELECT * FROM users 
+     WHERE id = $1 
+        OR telegram_id = $1 
+        OR LOWER(username) = $1 
+        OR LOWER(name) = $1 
+     ORDER BY is_verified DESC, created_at DESC 
+     LIMIT 1`,
+    [q]
   );
   return rowToUser(res.rows[0]);
 }
