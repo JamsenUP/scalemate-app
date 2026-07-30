@@ -369,6 +369,33 @@ export async function getMatches(userId) {
   return matches;
 }
 
+export async function getLikesReceived(userId) {
+  const userStr = String(userId);
+  const res = await pool.query(
+    `SELECT l.from_id, l.timestamp FROM likes l
+     WHERE l.to_id = $1 AND l.type = 'like'
+       AND l.from_id NOT IN (
+         SELECT to_id FROM likes WHERE from_id = $1
+       )
+     ORDER BY l.timestamp DESC`,
+    [userStr]
+  );
+
+  const incomingLikes = [];
+  for (const row of res.rows) {
+    const likerUser = await getUser(row.from_id);
+    if (likerUser) {
+      const chatId = [userStr, String(row.from_id)].sort().join('_');
+      incomingLikes.push({
+        user: likerUser,
+        chatId,
+        timestamp: row.timestamp
+      });
+    }
+  }
+  return incomingLikes;
+}
+
 export async function getSwipeHistory(userId) {
   const userStr = String(userId);
   const res = await pool.query(
@@ -511,7 +538,7 @@ export async function revokeVerification(userId, reason = 'Верификаци�
 // Legacy db object for backward compatibility
 export const db = {
   getUser, getUsers, createUser, updateUser, deleteUser,
-  addLike, blockUser, getSwipeFeed, getMatches,
+  addLike, blockUser, getSwipeFeed, getMatches, getLikesReceived,
   getSwipeHistory, changeSwipeDecision,
   addMessage, getMessages,
   getAdminStats, getAllUsers, getPendingVerifications,

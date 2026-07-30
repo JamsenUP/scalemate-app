@@ -369,6 +369,23 @@ app.get('/api/matches', async (req, res) => {
   }
 });
 
+// 6.5 Get Incoming Likes (Who liked me)
+app.get('/api/likes-received', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+
+    const user = await db.getUser(tgUser.id);
+    if (!user || !user.isVerified) return res.status(403).json({ error: 'Доступ ограничен' });
+
+    const likes = await db.getLikesReceived(user.id);
+    res.json({ likes });
+  } catch (err) {
+    console.error('GET /api/likes-received error:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 // 7. Get Chat Messages
 app.get('/api/chats/:chatId', async (req, res) => {
   try {
