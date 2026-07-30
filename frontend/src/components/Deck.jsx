@@ -502,10 +502,12 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
                 <div className="card-gradient"></div>
                 <div className="card-info">
                   
-                  {/* Verified Weight Badge */}
+                  {/* Verified Weight/Income Badge */}
                   <div className="badge-verified">
                     <Check size={12} strokeWidth={3} />
-                    {currentCard.weight} кг подтверждено (ИМТ {currentCard.bmi})
+                    {currentCard.gender === 'male' 
+                      ? `Доход ${parseInt(currentCard.income || 150000).toLocaleString('ru-RU')} ₽/мес подтвержден` 
+                      : `${currentCard.weight} кг подтверждено (ИМТ ${currentCard.bmi})`}
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>

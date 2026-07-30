@@ -306,7 +306,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           {/* Verification Badge Status */}
           {user.isVerified ? (
             <div className="badge-verified" style={{ padding: '6px 14px', fontSize: '12px' }}>
-              <CheckCircle2 size={14} strokeWidth={2.5} /> Вес {user.weight} кг Верифицирован
+              <CheckCircle2 size={14} strokeWidth={2.5} /> {user.gender === 'male' ? `Доход ${parseInt(user.income || 150000).toLocaleString('ru-RU')} ₽/мес Верифицирован` : `Вес ${user.weight} кг Верифицирован`}
             </div>
           ) : (
             <div style={{ background: 'rgba(255, 183, 3, 0.15)', border: '1px solid rgba(255, 183, 3, 0.3)', color: '#ffb703', padding: '6px 14px', borderRadius: '30px', fontSize: '12px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -318,7 +318,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
         {/* Verification & Parameters Details */}
         <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
-            Ваши параметры тела
+            {user.gender === 'male' ? 'Ваши профильные данные' : 'Ваши параметры тела'}
           </h3>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -331,11 +331,23 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
             </div>
 
             <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Scale color="var(--color-primary)" size={20} />
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Вес</span>
-                <strong style={{ fontSize: '15px' }}>{user.weight} кг</strong>
-              </div>
+              {user.gender === 'male' ? (
+                <>
+                  <DollarSign color="var(--color-accent)" size={20} />
+                  <div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Доход</span>
+                    <strong style={{ fontSize: '14px', color: 'var(--color-accent)' }}>{parseInt(user.income || 150000).toLocaleString('ru-RU')} ₽</strong>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Scale color="var(--color-primary)" size={20} />
+                  <div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Вес</span>
+                    <strong style={{ fontSize: '15px' }}>{user.weight} кг</strong>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

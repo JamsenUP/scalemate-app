@@ -74,6 +74,8 @@ export async function initDB() {
         text TEXT NOT NULL,
         timestamp TIMESTAMPTZ DEFAULT NOW()
       );
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS income INTEGER DEFAULT 0;
     `);
     console.log('✅ PostgreSQL tables initialized');
   } finally {
@@ -100,6 +102,7 @@ function rowToUser(row) {
     height: row.height,
     weight: row.weight,
     bmi: row.bmi,
+    income: row.income || 0,
     bio: row.bio || '',
     photos: row.photos || [],
     isVerified: row.is_verified,
@@ -222,6 +225,7 @@ export async function updateUser(id, updateData) {
     bmi: 'bmi',
     bio: 'bio',
     photos: 'photos',
+    income: 'income',
     isVerified: 'is_verified',
     verificationPhoto: 'verification_photo',
     verificationSelfie: 'verification_selfie',

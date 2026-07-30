@@ -260,14 +260,41 @@ app.post('/api/request-moderation', upload.single('fullBodyPhoto'), async (req, 
     }
 
     const updatedUser = await db.updateUser(user.id, {
-      isVerified: false, verificationStatus: 'pending_moderation',
-      verificationPhoto: photoUrl, verificationDate: new Date().toISOString()
+      verificationPhoto: photoUrl,
+      verificationStatus: 'pending_moderation',
+      verificationDate: new Date().toISOString()
     });
 
-    res.json({ success: true, message: 'Заявка отправлена на модерацию!', user: updatedUser, aiEstimate });
+    res.json({ success: true, message: 'Отправлено на модерацию', user: updatedUser });
   } catch (err) {
-    console.error('Moderation request error:', err);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    console.error('POST /api/request-moderation error:', err);
+    res.status(500).json({ error: 'Ошибка сервера при отправке на модерацию' });
+  }
+});
+
+// 3.6 Income Verification for Men (Bank screenshot)
+app.post('/api/verify-income', upload.single('incomePhoto'), async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+
+    const user = await db.getUser(tgUser.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    const incomeVal = req.body.income ? parseInt(req.body.income) : (user.income || 0);
+    const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+    const updatedUser = await db.updateUser(user.id, {
+      income: incomeVal,
+      verificationPhoto: photoUrl || user.verificationPhoto,
+      verificationStatus: 'pending_moderation',
+      verificationDate: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'Скриншот дохода отправлен на модерацию', user: updatedUser });
+  } catch (err) {
+    console.error('POST /api/verify-income error:', err);
+    res.status(500).json({ error: 'Ошибка сервера при верификации дохода' });
   }
 });
 
