@@ -181,6 +181,7 @@ export default function App() {
             onOpenFaceCheck={() => setShowFaceCheck(true)}
             onUpdateUser={(updated) => setUser(updated)}
             API_URL={API_URL} 
+            tgUserId={devUserId}
           />
         );
         break;

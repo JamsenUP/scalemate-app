@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Scale, Ruler, CheckCircle2, ShieldAlert, AlertCircle, LogOut, Edit3, Camera, Save, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Scale, Ruler, CheckCircle2, ShieldAlert, AlertCircle, LogOut, Edit3, Camera, Save, X, Upload } from 'lucide-react';
 
-export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, onUpdateUser, API_URL }) {
+export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, onUpdateUser, API_URL, tgUserId }) {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: user.name || '',
@@ -11,8 +11,10 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
     preferredGender: user.preferredGender || 'male'
   });
   const [photoFiles, setPhotoFiles] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const fileInputRef = useRef(null);
 
   // Determine BMI Category and Color
   const getBmiDetails = (bmi) => {
@@ -30,8 +32,33 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
     const tgInit = window.Telegram?.WebApp?.initData;
     if (tgInit) {
       headers['x-tg-init-data'] = tgInit;
+    } else if (tgUserId) {
+      headers['x-dev-user-id'] = tgUserId;
     }
     return headers;
+  };
+
+  const handlePhotoSelect = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setPhotoFiles(files);
+      const url = URL.createObjectURL(files[0]);
+      setPreviewUrl(url);
+    }
+  };
+
+  const handleOpenEdit = () => {
+    setFormData({
+      name: user.name || '',
+      age: user.age || '',
+      height: user.height || '',
+      bio: user.bio || '',
+      preferredGender: user.preferredGender || 'male'
+    });
+    setPhotoFiles([]);
+    setPreviewUrl('');
+    setError('');
+    setIsEditing(true);
   };
 
   const handleSaveProfile = async (e) => {
@@ -74,33 +101,97 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
     }
   };
 
+  const currentAvatarSrc = previewUrl 
+    ? previewUrl 
+    : (user.photos?.[0] ? (user.photos[0].startsWith('http') ? user.photos[0] : (API_URL + user.photos[0])) : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150');
+
   return (
-    <div className="screen-container" style={{ paddingBottom: '90px' }}>
+    <div className="screen-container" style={{ paddingBottom: '90px', overflowX: 'hidden' }}>
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
 
       {/* Edit Profile Modal */}
       {isEditing && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '85vh', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box', overflow: 'hidden', touchAction: 'none' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '88vh', overflowY: 'auto', overflowX: 'hidden', boxSizing: 'border-box' }}>
+            
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Edit3 color="var(--color-primary)" size={18} /> Редактировать Профиль
               </h3>
-              <button onClick={() => setIsEditing(false)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
+              <button type="button" onClick={() => setIsEditing(false)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
                 <X size={16} />
               </button>
             </div>
 
             {error && (
-              <div style={{ background: 'rgba(255, 95, 95, 0.1)', color: '#ff5f5f', padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
+              <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
                 ⚠️ {error}
               </div>
             )}
 
-            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
               
-              <div className="input-group">
+              {/* Avatar Selector Preview */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ position: 'relative', cursor: 'pointer', width: '90px', height: '90px' }}
+                >
+                  <img 
+                    src={currentAvatarSrc} 
+                    alt="Avatar Preview" 
+                    style={{ 
+                      width: '90px', 
+                      height: '90px', 
+                      borderRadius: '50%', 
+                      objectFit: 'cover', 
+                      border: '3px solid var(--color-primary)',
+                      boxShadow: 'var(--shadow-neon)' 
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0,
+                    background: 'var(--color-primary)',
+                    color: '#fff',
+                    borderRadius: '50%',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+                  }}>
+                    <Camera size={14} />
+                  </div>
+                </div>
+
+                <input 
+                  ref={fileInputRef}
+                  type="file" 
+                  accept="image/*"
+                  onChange={handlePhotoSelect}
+                  style={{ display: 'none' }}
+                />
+
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--color-accent)', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Upload size={12} /> {photoFiles.length > 0 ? 'Сменить выбранную фото' : 'Нажмите, чтобы сменить Аватарку'}
+                </button>
+
+                {photoFiles.length > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--color-accent)', background: 'rgba(0, 245, 212, 0.15)', padding: '3px 8px', borderRadius: '10px' }}>
+                    Новая фото готова к сохранению!
+                  </span>
+                )}
+              </div>
+
+              {/* Form Fields: Single Column layout for perfect mobile fit without overflow */}
+              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
                 <span className="input-label">Имя</span>
                 <input 
                   type="text" 
@@ -108,42 +199,43 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                   value={formData.name} 
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   required 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="input-group">
-                  <span className="input-label">Возраст</span>
-                  <input 
-                    type="text" 
-                    inputMode="numeric"
-                    className="input-field" 
-                    value={formData.age} 
-                    onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
-                    required 
-                  />
-                </div>
-
-                <div className="input-group">
-                  <span className="input-label">Рост (см)</span>
-                  <input 
-                    type="text" 
-                    inputMode="numeric"
-                    className="input-field" 
-                    value={formData.height} 
-                    onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
-                    required 
-                  />
-                </div>
+              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
+                <span className="input-label">Возраст</span>
+                <input 
+                  type="text" 
+                  inputMode="numeric"
+                  className="input-field" 
+                  value={formData.age} 
+                  onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
+                  required 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
               </div>
 
-              <div className="input-group">
+              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
+                <span className="input-label">Рост (см)</span>
+                <input 
+                  type="text" 
+                  inputMode="numeric"
+                  className="input-field" 
+                  value={formData.height} 
+                  onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
+                  required 
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
                 <span className="input-label">Кого ищете</span>
                 <select 
                   className="input-field" 
                   value={formData.preferredGender} 
                   onChange={(e) => setFormData(prev => ({ ...prev, preferredGender: e.target.value }))}
-                  style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}
+                  style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)', width: '100%', boxSizing: 'border-box' }}
                 >
                   <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужчин</option>
                   <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женщин</option>
@@ -151,30 +243,19 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                 </select>
               </div>
 
-              <div className="input-group">
+              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
                 <span className="input-label">О себе (Статус)</span>
                 <textarea 
                   className="input-field" 
-                  rows={3}
+                  rows={2}
                   value={formData.bio} 
                   onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
-                  placeholder="Расскажите о своих увлечениях..."
-                  style={{ resize: 'none' }}
+                  placeholder="Расскажите о себе..."
+                  style={{ resize: 'none', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
 
-              <div className="input-group">
-                <span className="input-label"><Camera size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Загрузить новый Аватар</span>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  onChange={(e) => setPhotoFiles(Array.from(e.target.files))}
-                  className="input-field"
-                  style={{ padding: '8px' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
                 <button type="button" onClick={() => setIsEditing(false)} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>
                   Отмена
                 </button>
@@ -215,7 +296,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           </div>
 
           <button 
-            onClick={() => setIsEditing(true)} 
+            onClick={handleOpenEdit} 
             className="btn" 
             style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '20px', gap: '6px' }}
           >
