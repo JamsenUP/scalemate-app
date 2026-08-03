@@ -310,7 +310,7 @@ app.post('/api/profile/edit', upload.array('photos', 5), async (req, res) => {
   }
 });
 
-// 2.6 Photo Management Endpoints (Add, Delete, Set Avatar)
+// 2.6 Photo Management Endpoints
 app.post('/api/profile/photos/add', upload.array('photos', 5), async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
@@ -783,6 +783,16 @@ app.get('/api/admin/all', async (req, res) => {
     if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
     const allUsers = await db.getAllUsers();
     res.json({ allUsers });
+  } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
+});
+
+app.get('/api/admin/verified', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
+    const verified = await db.getVerifiedUsers();
+    res.json({ verified });
   } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 

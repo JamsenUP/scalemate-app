@@ -7,10 +7,9 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const [pending, setPending] = useState([]);
   const [verifiedList, setVerifiedList] = useState([]);
   const [reports, setReports] = useState([]);
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'all' | 'verified' | 'reports'
+  const [activeTab, setActiveTab] = useState('all'); // 'pending' | 'all' | 'verified' | 'reports'
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState('');
-  const [previewPhoto, setPreviewPhoto] = useState(null);
 
   // Inspector User Modal (Requirement #3)
   const [selectedUser, setSelectedUser] = useState(null);
@@ -35,32 +34,49 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
 
   const fetchAdminData = async () => {
     setLoading(true);
+    const authHeaders = getAuthHeaders();
+
     try {
-      const authHeaders = getAuthHeaders();
-      const [statsRes, allRes, pendingRes, verifiedRes, reportsRes] = await Promise.all([
-        fetch(`${API_URL}/api/admin/stats`, { headers: authHeaders }),
-        fetch(`${API_URL}/api/admin/all`, { headers: authHeaders }),
-        fetch(`${API_URL}/api/admin/pending`, { headers: authHeaders }),
-        fetch(`${API_URL}/api/admin/verified`, { headers: authHeaders }),
-        fetch(`${API_URL}/api/admin/reports`, { headers: authHeaders })
-      ]);
+      const statsRes = await fetch(`${API_URL}/api/admin/stats`, { headers: authHeaders });
+      if (statsRes.ok) {
+        const d = await statsRes.json();
+        setStats(d.stats);
+      }
+    } catch (e) { console.error('Stats fetch error:', e); }
 
-      const statsData = await statsRes.json();
-      const allData = await allRes.json();
-      const pendingData = await pendingRes.json();
-      const verifiedData = await verifiedRes.json();
-      const reportsData = await reportsRes.json();
+    try {
+      const allRes = await fetch(`${API_URL}/api/admin/all`, { headers: authHeaders });
+      if (allRes.ok) {
+        const d = await allRes.json();
+        setAllList(d.allUsers || []);
+      }
+    } catch (e) { console.error('All users fetch error:', e); }
 
-      if (statsRes.ok) setStats(statsData.stats);
-      if (allRes.ok) setAllList(allData.allUsers || []);
-      if (pendingRes.ok) setPending(pendingData.pending || []);
-      if (verifiedRes.ok) setVerifiedList(verifiedData.verified || []);
-      if (reportsRes.ok) setReports(reportsData.reports || []);
-    } catch (err) {
-      console.error('Error fetching admin data:', err);
-    } finally {
-      setLoading(false);
-    }
+    try {
+      const pendingRes = await fetch(`${API_URL}/api/admin/pending`, { headers: authHeaders });
+      if (pendingRes.ok) {
+        const d = await pendingRes.json();
+        setPending(d.pending || []);
+      }
+    } catch (e) { console.error('Pending fetch error:', e); }
+
+    try {
+      const verifiedRes = await fetch(`${API_URL}/api/admin/verified`, { headers: authHeaders });
+      if (verifiedRes.ok) {
+        const d = await verifiedRes.json();
+        setVerifiedList(d.verified || []);
+      }
+    } catch (e) { console.error('Verified fetch error:', e); }
+
+    try {
+      const reportsRes = await fetch(`${API_URL}/api/admin/reports`, { headers: authHeaders });
+      if (reportsRes.ok) {
+        const d = await reportsRes.json();
+        setReports(d.reports || []);
+      }
+    } catch (e) { console.error('Reports fetch error:', e); }
+
+    setLoading(false);
   };
 
   const handleInspectUser = async (u) => {
@@ -204,6 +220,12 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
     return p.startsWith('http') ? p : API_URL + p;
   };
 
+  // Determine current active list
+  let currentList = [];
+  if (activeTab === 'pending') currentList = pending;
+  else if (activeTab === 'all') currentList = allList;
+  else if (activeTab === 'verified') currentList = verifiedList;
+
   return (
     <div className="screen-container">
       <div className="bg-mesh mesh-1"></div>
@@ -236,36 +258,39 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
             <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
               <Users size={16} color="var(--color-primary)" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800' }}>{stats.totalUsers}</div>
+              <div style={{ fontSize: '15px', fontWeight: '800' }}>{stats.totalUsers || allList.length}</div>
               <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Всего</div>
             </div>
             <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
               <Clock size={16} color="#ffd700" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#ffd700' }}>{stats.pendingUsers}</div>
+              <div style={{ fontSize: '15px', fontWeight: '800', color: '#ffd700' }}>{pending.length}</div>
               <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Проверка</div>
             </div>
             <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
               <CheckCircle size={16} color="#00f5d4" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#00f5d4' }}>{stats.verifiedUsers}</div>
+              <div style={{ fontSize: '15px', fontWeight: '800', color: '#00f5d4' }}>{verifiedList.length}</div>
               <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Одобрено</div>
             </div>
             <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
-              <Ban size={16} color="#ff5f5f" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#ff5f5f' }}>{stats.bannedUsers || 0}</div>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Баны</div>
+              <ShieldAlert size={16} color="#ff5f5f" style={{ margin: 'auto' }} />
+              <div style={{ fontSize: '15px', fontWeight: '800', color: '#ff5f5f' }}>{reports.length}</div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Жалобы</div>
             </div>
           </div>
         )}
 
         {/* Tabs */}
-        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '16px', gap: '4px' }}>
-          <button onClick={() => setActiveTab('pending')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'pending' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-            На проверке ({pending.length})
+        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '16px', gap: '4px', overflowX: 'auto' }}>
+          <button onClick={() => setActiveTab('all')} style={{ flex: 1, padding: '8px 6px', borderRadius: '12px', border: 'none', background: activeTab === 'all' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Все профили ({allList.length})
           </button>
-          <button onClick={() => setActiveTab('all')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'all' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-            Все ({allList.length})
+          <button onClick={() => setActiveTab('pending')} style={{ flex: 1, padding: '8px 6px', borderRadius: '12px', border: 'none', background: activeTab === 'pending' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Проверка ({pending.length})
           </button>
-          <button onClick={() => setActiveTab('reports')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'reports' ? '#ff5f5f' : 'transparent', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+          <button onClick={() => setActiveTab('verified')} style={{ flex: 1, padding: '8px 6px', borderRadius: '12px', border: 'none', background: activeTab === 'verified' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Одобренные ({verifiedList.length})
+          </button>
+          <button onClick={() => setActiveTab('reports')} style={{ flex: 1, padding: '8px 6px', borderRadius: '12px', border: 'none', background: activeTab === 'reports' ? '#ff5f5f' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             Жалобы ({reports.length})
           </button>
         </div>
@@ -277,13 +302,17 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
           /* Reports Moderation List */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {reports.length === 0 ? (
-              <div className="glass" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Жалоб нет</div>
+              <div className="glass-premium" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '20px' }}>
+                <ShieldCheck size={32} color="#00f5d4" style={{ margin: 'auto', marginBottom: '8px' }} />
+                Жалоб на отзывы нет. Все чисто!
+              </div>
             ) : (
               reports.map(rep => (
                 <div key={rep.id} className="glass-premium" style={{ padding: '14px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ fontSize: '13px', color: '#ff5f5f', fontWeight: '700' }}>⚠️ Жалоба на отзыв от {rep.reviewer_name}</div>
-                  <div style={{ fontSize: '12px' }}><strong>Отзыв:</strong> "{rep.comment}"</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}><strong>Причина жалобы:</strong> {rep.reason}</div>
+                  <div style={{ fontSize: '13px', color: '#ff5f5f', fontWeight: '700' }}>⚠️ Жалоба от пользователя #{rep.reporter_id}</div>
+                  <div style={{ fontSize: '12px' }}><strong>Автор отзыва:</strong> {rep.reviewer_name}</div>
+                  <div style={{ fontSize: '12px' }}><strong>Текст отзыва:</strong> "{rep.comment}"</div>
+                  <div style={{ fontSize: '12px', color: '#ffd700' }}><strong>Причина жалобы:</strong> {rep.reason}</div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                     <button onClick={() => handleResolveReport(rep.id, 'delete')} className="btn" style={{ padding: '6px 12px', fontSize: '11px', background: '#ff5f5f' }}>Удалить отзыв</button>
                     <button onClick={() => handleResolveReport(rep.id, 'dismiss')} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '11px' }}>Отклонить жалобу</button>
@@ -295,44 +324,58 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
         ) : (
           /* Users Moderation List */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {(activeTab === 'pending' ? pending : allList).map(u => (
-              <div key={u.id} className="glass-premium" style={{ padding: '14px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <img src={getPhotoUrl(u.photos?.[0])} alt={u.name} style={{ width: '52px', height: '52px', borderRadius: '50%', objectFit: 'cover', border: u.isBanned ? '2px solid #ff5f5f' : '2px solid var(--color-primary)' }} />
-                
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <strong style={{ fontSize: '15px' }}>{u.name}, {u.age}</strong>
-                    {u.isBanned && <span style={{ fontSize: '10px', background: '#ff5f5f', color: '#fff', padding: '2px 6px', borderRadius: '10px' }}>БАН</span>}
-                    {u.warningsCount > 0 && <span style={{ fontSize: '10px', background: '#ffd700', color: '#000', padding: '2px 6px', borderRadius: '10px' }}>⚠️ {u.warningsCount}/3</span>}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    📍 {u.city || 'Москва'} | {u.gender === 'male' ? `💰 ${parseInt(u.income || 0).toLocaleString('ru-RU')} ₽` : `⚖️ ${u.weight} кг`}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {/* Detailed Inspect Modal Button */}
-                  <button onClick={() => handleInspectUser(u)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px' }} title="Инспектор">
-                    <Eye size={16} />
-                  </button>
-
-                  {u.verificationStatus === 'pending_moderation' && (
-                    <>
-                      <button onClick={() => handleApprove(u.id)} className="btn btn-accent" style={{ padding: '8px', borderRadius: '12px' }} title="Одобрить">
-                        <Check size={16} />
-                      </button>
-                      <button onClick={() => handleReject(u.id)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px', color: '#ff5f5f' }} title="Отклонить">
-                        <X size={16} />
-                      </button>
-                    </>
-                  )}
-
-                  <button onClick={() => handleDeleteUser(u.id, u.name)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px', color: '#ff5f5f' }} title="Удалить">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+            {currentList.length === 0 ? (
+              <div className="glass-premium" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '20px' }}>
+                <Users size={32} style={{ margin: 'auto', marginBottom: '8px' }} />
+                {activeTab === 'pending' ? (
+                  <>
+                    <p style={{ marginBottom: '10px' }}>Нет пользователей, ожидающих проверки.</p>
+                    <button onClick={() => setActiveTab('all')} className="btn btn-accent" style={{ padding: '8px 14px', fontSize: '12px', margin: 'auto' }}>
+                      Открыть Все Профили ({allList.length})
+                    </button>
+                  </>
+                ) : 'Список пользователей пуст.'}
               </div>
-            ))}
+            ) : (
+              currentList.map(u => (
+                <div key={u.id} className="glass-premium" style={{ padding: '14px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <img src={getPhotoUrl(u.photos?.[0])} alt={u.name} style={{ width: '52px', height: '52px', borderRadius: '50%', objectFit: 'cover', border: u.isBanned ? '2px solid #ff5f5f' : '2px solid var(--color-primary)' }} />
+                  
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <strong style={{ fontSize: '15px' }}>{u.name}, {u.age}</strong>
+                      {u.isBanned && <span style={{ fontSize: '10px', background: '#ff5f5f', color: '#fff', padding: '2px 6px', borderRadius: '10px' }}>БАН</span>}
+                      {u.warningsCount > 0 && <span style={{ fontSize: '10px', background: '#ffd700', color: '#000', padding: '2px 6px', borderRadius: '10px' }}>⚠️ {u.warningsCount}/3</span>}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      📍 {u.city || 'Москва'} | {u.gender === 'male' ? `💰 ${parseInt(u.income || 0).toLocaleString('ru-RU')} ₽` : `⚖️ ${u.weight} кг`}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {/* Detailed Inspect Modal Button */}
+                    <button onClick={() => handleInspectUser(u)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px' }} title="Инспектор">
+                      <Eye size={16} />
+                    </button>
+
+                    {u.verificationStatus === 'pending_moderation' && (
+                      <>
+                        <button onClick={() => handleApprove(u.id)} className="btn btn-accent" style={{ padding: '8px', borderRadius: '12px' }} title="Одобрить">
+                          <Check size={16} />
+                        </button>
+                        <button onClick={() => handleReject(u.id)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px', color: '#ff5f5f' }} title="Отклонить">
+                          <X size={16} />
+                        </button>
+                      </>
+                    )}
+
+                    <button onClick={() => handleDeleteUser(u.id, u.name)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px', color: '#ff5f5f' }} title="Удалить">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -383,7 +426,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                   </div>
                 </div>
 
-                {/* Warning Action Box (Requirement #3) */}
+                {/* Warning Action Box */}
                 <div className="glass" style={{ padding: '12px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <h4 style={{ fontSize: '13px', color: '#ffd700' }}>⚠️ Вынести предупреждение</h4>
                   <input type="text" placeholder="Причина (например: Неправдивое фото)" className="input-field" value={warnReason} onChange={e => setWarnReason(e.target.value)} style={{ padding: '8px 12px', fontSize: '12px' }} />
@@ -392,7 +435,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                   </button>
                 </div>
 
-                {/* Ban Action Box (Requirement #3) */}
+                {/* Ban Action Box */}
                 <div className="glass" style={{ padding: '12px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <h4 style={{ fontSize: '13px', color: '#ff5f5f' }}>⛔ Заблокировать / Разблокировать</h4>
                   {selectedUser.isBanned ? (
@@ -414,7 +457,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                   {selectedUser.isAdmin ? 'Снять роль Модератора' : 'Сделать Модератором 👑'}
                 </button>
 
-                {/* Chat Log Inspector (Requirement #3) */}
+                {/* Chat Log Inspector */}
                 <div>
                   <h4 style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px' }}>
                     История сообщений в чатах ({inspectorData?.chatLogs?.length || 0})
