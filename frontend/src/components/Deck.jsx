@@ -16,7 +16,7 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
     minHeight: 140,
     maxHeight: 210,
     minWeight: 35,
-    maxWeight: 120,
+    maxWeight: 200,
     minIncome: 0,
     city: 'Все населенные пункты'
   });
@@ -56,168 +56,167 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
     setLoading(true);
     setError('');
     try {
-      const queryParams = new URLSearchParams();
-      if (filters.minAge) queryParams.append('minAge', filters.minAge);
-      if (filters.maxAge) queryParams.append('maxAge', filters.maxAge);
-      if (filters.minHeight) queryParams.append('minHeight', filters.minHeight);
-      if (filters.maxHeight) queryParams.append('maxHeight', filters.maxHeight);
-      if (filters.minWeight) queryParams.append('minWeight', filters.minWeight);
-      if (filters.maxWeight) queryParams.append('maxWeight', filters.maxWeight);
-      if (filters.minIncome) queryParams.append('minIncome', filters.minIncome);
-      if (filters.city && filters.city !== 'Все населенные пункты' && filters.city !== 'Все города') {
-        queryParams.append('city', filters.city);
-      }
+      const query = new URLSearchParams();
+      if (filters.minAge) query.append('minAge', filters.minAge);
+      if (filters.maxAge) query.append('maxAge', filters.maxAge);
+      if (filters.minHeight) query.append('minHeight', filters.minHeight);
+      if (filters.maxHeight) query.append('maxHeight', filters.maxHeight);
+      if (filters.minWeight) query.append('minWeight', filters.minWeight);
+      if (filters.maxWeight) query.append('maxWeight', filters.maxWeight);
+      if (filters.minIncome) query.append('minIncome', filters.minIncome);
+      if (filters.city && filters.city !== 'Все населенные пункты') query.append('city', filters.city);
 
-      const response = await fetch(`${API_URL}/api/cards?${queryParams.toString()}`, {
+      const response = await fetch(`${API_URL}/api/cards?${query.toString()}`, {
         headers: getAuthHeaders()
       });
-      
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Не удалось загрузить карточки');
 
-      setFeed(result.cards || []);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Ошибка загрузки карточек');
+
+      setFeed(data.cards || []);
       setCurrentIndex(0);
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      setError('Не удалось загрузить анкеты');
     } finally {
       setLoading(false);
     }
   };
 
+  const currentCard = feed[currentIndex];
+  const hasCards = feed.length > 0 && currentIndex < feed.length;
+
   const handleSwipe = async (action) => {
-    if (currentIndex >= feed.length) return;
-    const targetUser = feed[currentIndex];
-    
-    setCurrentIndex(prev => prev + 1);
-    setDragOffset({ x: 0, y: 0 });
+    if (!currentCard) return;
 
-    try {
-      const response = await fetch(`${API_URL}/api/like`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ targetUserId: targetUser.id, action })
-      });
+    const targetUser = currentCard;
+    setDragOffset({ x: action === 'like' ? 500 : -500, y: 0 });
 
-      const result = await response.json();
-      if (result.isMatch) {
-        setMatchData({ partner: result.matchedUser || targetUser });
+    setTimeout(async () => {
+      setDragOffset({ x: 0, y: 0 });
+      setCurrentIndex(prev => prev + 1);
+
+      try {
+        const response = await fetch(`${API_URL}/api/like`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ targetUserId: targetUser.id, action })
+        });
+
+        const result = await response.json();
+        if (result.isMatch && result.matchedUser) {
+          setMatchData(result.matchedUser);
+        }
+      } catch (err) {
+        console.error(err);
       }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleOpenDetailedProfile = async (cardUser) => {
-    setModalUser(cardUser);
-    setModalPhotoIndex(0);
-    setShowProfileModal(true);
-    try {
-      const res = await fetch(`${API_URL}/api/reviews/${cardUser.id}`, { headers: getAuthHeaders() });
-      const data = await res.json();
-      if (res.ok) setModalReviews(data.reviews || []);
-    } catch (e) {
-      console.error(e);
-    }
+    }, 250);
   };
 
   const handleSendDirectMessage = async (e) => {
     e.preventDefault();
-    const currentCard = feed[currentIndex];
     if (!directMsgText.trim() || !currentCard) return;
 
     setSendingMsg(true);
     try {
-      const targetPartner = currentCard;
+      const chatId = [user.id, currentCard.id].sort().join('_');
+
+      // Add like first to trigger potential match
       await fetch(`${API_URL}/api/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ targetUserId: targetPartner.id, action: 'like' })
+        body: JSON.stringify({ targetUserId: currentCard.id, action: 'like' })
       });
 
-      const chatId = [String(user.id), String(targetPartner.id)].sort().join('_');
-      await fetch(`${API_URL}/api/chats/${chatId}/message`, {
+      // Send first message
+      const res = await fetch(`${API_URL}/api/chats/${chatId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ text: directMsgText })
       });
 
-      setShowMessageModal(false);
-      setDirectMsgText('');
-      setCurrentIndex(prev => prev + 1);
-      onNavigateToChat(targetPartner.id);
-    } catch (err) {
-      console.error(err);
+      if (res.ok) {
+        setShowMessageModal(false);
+        setDirectMsgText('');
+        onNavigateToChat(chatId, currentCard);
+      }
+    } catch (e) {
+      console.error(e);
     } finally {
       setSendingMsg(false);
     }
   };
 
-  const handleShareApp = () => {
-    const text = encodeURIComponent('Присоединяйся к ScaleMate — честные знакомства с верификацией по всей России!');
-    const url = encodeURIComponent('https://t.me/scalemate_bot');
-    window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
+  const handleOpenDetailedProfile = async (targetUser) => {
+    setModalUser(targetUser);
+    setModalPhotoIndex(0);
+    setShowProfileModal(true);
+    try {
+      const res = await fetch(`${API_URL}/api/reviews/${targetUser.id}`, { headers: getAuthHeaders() });
+      const d = await res.json();
+      if (res.ok) setModalReviews(d.reviews || []);
+    } catch (e) { console.error(e); }
   };
 
-  const getPhotoUrl = (p) => {
-    if (!p) return 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
-    return p.startsWith('http') ? p : API_URL + p;
-  };
-
-  // Touch & Drag events
+  // Touch Swipe Handlers
   const handleTouchStart = (e) => {
-    setIsDragging(true);
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     setStartPos({ x: clientX, y: clientY });
+    setIsDragging(true);
   };
 
   const handleTouchMove = (e) => {
     if (!isDragging) return;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    setDragOffset({ x: clientX - startPos.x, y: clientY - startPos.y });
+    setDragOffset({
+      x: clientX - startPos.x,
+      y: clientY - startPos.y
+    });
   };
 
   const handleTouchEnd = () => {
     if (!isDragging) return;
     setIsDragging(false);
-    if (dragOffset.x > 90) handleSwipe('like');
-    else if (dragOffset.x < -90) handleSwipe('dislike');
+
+    if (dragOffset.x > 100) handleSwipe('like');
+    else if (dragOffset.x < -100) handleSwipe('dislike');
     else setDragOffset({ x: 0, y: 0 });
   };
 
-  const currentCard = feed[currentIndex];
-  const hasCards = currentIndex < feed.length;
+  const getPhotoUrl = (p) => {
+    if (!p) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500';
+    return p.startsWith('http') ? p : API_URL + p;
+  };
 
   return (
     <div className="screen-container">
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
 
-      {/* Advanced Filters Modal with Settlement Autocomplete */}
+      {/* Filter Modal */}
       {showFilters && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px' }}>Фильтры поиска</h3>
+              <h3 style={{ fontSize: '18px' }}>Фильтры поиска 🔍</h3>
               <button onClick={() => setShowFilters(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
-            {/* Any Settlement / Region Search Input */}
             <div className="input-group">
-              <span className="input-label">Населенный пункт / Регион</span>
+              <span className="input-label">Населенный пункт (любой город, село)</span>
               <input 
                 type="text"
                 list="deck-settlements-datalist"
                 placeholder="Все населенные пункты"
                 className="input-field" 
                 value={filters.city} 
-                onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} 
+                onChange={e => setFilters(prev => ({ ...prev, city: e.target.value }))} 
               />
               <datalist id="deck-settlements-datalist">
                 <option value="Все населенные пункты" />
-                {POPULAR_SETTLEMENTS.map(c => <option key={c} value={c} />)}
+                {POPULAR_SETTLEMENTS.map(s => <option key={s} value={s} />)}
               </datalist>
             </div>
 
@@ -229,26 +228,15 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               </div>
             </div>
 
-            <div className="input-group">
-              <span className="input-label">Рост: {filters.minHeight} - {filters.maxHeight} см</span>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <input type="range" min="140" max="210" value={filters.minHeight} onChange={e => setFilters(prev => ({ ...prev, minHeight: Number(e.target.value) }))} style={{ flex: 1 }} />
-                <input type="range" min="140" max="210" value={filters.maxHeight} onChange={e => setFilters(prev => ({ ...prev, maxHeight: Number(e.target.value) }))} style={{ flex: 1 }} />
-              </div>
-            </div>
-
             {user.gender === 'female' ? (
               <div className="input-group">
-                <span className="input-label">Мин. Доход мужчины: {filters.minIncome ? parseInt(filters.minIncome).toLocaleString('ru-RU') : 0} ₽/мес</span>
-                <input type="range" min="0" max="1000000" step="50000" value={filters.minIncome} onChange={e => setFilters(prev => ({ ...prev, minIncome: Number(e.target.value) }))} style={{ width: '100%' }} />
+                <span className="input-label">Минимальный доход мужчин: {filters.minIncome.toLocaleString('ru-RU')} ₽/мес</span>
+                <input type="range" min="0" max="1000000" step="50000" value={filters.minIncome} onChange={e => setFilters(prev => ({ ...prev, minIncome: Number(e.target.value) }))} />
               </div>
             ) : (
               <div className="input-group">
-                <span className="input-label">Вес девушки: {filters.minWeight} - {filters.maxWeight} кг</span>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input type="range" min="35" max="120" value={filters.minWeight} onChange={e => setFilters(prev => ({ ...prev, minWeight: Number(e.target.value) }))} style={{ flex: 1 }} />
-                  <input type="range" min="35" max="120" value={filters.maxWeight} onChange={e => setFilters(prev => ({ ...prev, maxWeight: Number(e.target.value) }))} style={{ flex: 1 }} />
-                </div>
+                <span className="input-label">Максимальный вес женщин: {filters.maxWeight} кг</span>
+                <input type="range" min="35" max="200" value={filters.maxWeight} onChange={e => setFilters(prev => ({ ...prev, maxWeight: Number(e.target.value) }))} />
               </div>
             )}
 
@@ -448,21 +436,82 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
             </div>
             <h3>Анкеты пока закончились</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '8px', maxWidth: '260px' }}>
-              Вы просмотрели доступные анкеты. Попробуйте обновить фильтр или пригласить друзей!
+              Вы просмотрели все доступные анкеты по заданным фильтрам.
             </p>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px', width: '100%', maxWidth: '260px' }}>
-              <button onClick={fetchFeed} className="btn btn-secondary" style={{ padding: '12px', fontSize: '13px' }}>
-                <RotateCcw size={15} /> Обновить ленту
-              </button>
-
-              <button onClick={handleShareApp} className="btn btn-accent" style={{ padding: '12px', fontSize: '13px', gap: '6px' }}>
-                <Share2 size={15} /> Поделиться с друзьями
-              </button>
-            </div>
+            <button onClick={() => { setFilters({ minAge: 18, maxAge: 60, minHeight: 140, maxHeight: 210, minWeight: 35, maxWeight: 200, minIncome: 0, city: 'Все населенные пункты' }); fetchFeed(); }} className="btn btn-secondary" style={{ marginTop: '15px', padding: '10px 20px', borderRadius: '20px', gap: '6px' }}>
+              <RotateCcw size={16} /> Сбросить фильтры
+            </button>
           </div>
         )}
+
       </div>
+
+      {/* Direct Message Modal */}
+      {showMessageModal && currentCard && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <h3 style={{ fontSize: '18px' }}>Написать {currentCard.name}</h3>
+            
+            <form onSubmit={handleSendDirectMessage} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <textarea 
+                placeholder="Привет! Предлагаю познакомиться..." 
+                className="input-field" 
+                rows={3} 
+                value={directMsgText} 
+                onChange={e => setDirectMsgText(e.target.value)} 
+                style={{ resize: 'none' }}
+                required 
+              />
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" onClick={() => setShowMessageModal(false)} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>Отмена</button>
+                <button type="submit" className="btn btn-accent" disabled={sendingMsg} style={{ flex: 1, padding: '12px' }}>
+                  {sendingMsg ? 'Отправка...' : 'Отправить'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Match Overlay */}
+      {matchData && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(10, 8, 19, 0.95)', backdropFilter: 'blur(15px)', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '10px' }}>💖</div>
+          <h1 style={{ fontSize: '32px', color: 'var(--color-accent)', marginBottom: '8px' }}>Это Взаимно!</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '15px', marginBottom: '24px' }}>
+            Вы и {matchData.name} понравились друг другу!
+          </p>
+
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '30px' }}>
+            <img src={getPhotoUrl(user.photos?.[0])} alt={user.name} style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-primary)' }} />
+            <img src={getPhotoUrl(matchData.photos?.[0])} alt={matchData.name} style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-accent)' }} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
+            <button 
+              onClick={() => {
+                const chatId = [user.id, matchData.id].sort().join('_');
+                setMatchData(null);
+                onNavigateToChat(chatId, matchData);
+              }}
+              className="btn btn-accent"
+              style={{ padding: '14px', borderRadius: '16px' }}
+            >
+              Написать прямо сейчас
+            </button>
+
+            <button 
+              onClick={() => setMatchData(null)}
+              className="btn btn-secondary"
+              style={{ padding: '14px', borderRadius: '16px' }}
+            >
+              Продолжить смотреть
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
