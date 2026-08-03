@@ -197,16 +197,16 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
             </div>
 
             {isEditing ? (
-              <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                 {error && <div style={{ color: '#ff5f5f', fontSize: '12px' }}>⚠️ {error}</div>}
 
-                <div className="input-group">
+                <div className="input-group" style={{ marginBottom: 0 }}>
                   <span className="input-label">Имя (только имя)</span>
                   <input type="text" className="input-field" value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} required />
                 </div>
 
-                <div className="input-group">
-                  <span className="input-label">Населенный пункт (город, село, деревня)</span>
+                <div className="input-group" style={{ marginBottom: 0 }}>
+                  <span className="input-label">Населенный пункт</span>
                   <input 
                     type="text"
                     list="profile-settlements-datalist"
@@ -221,30 +221,30 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                   </datalist>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="input-group">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%' }}>
+                  <div className="input-group" style={{ marginBottom: 0, minWidth: 0 }}>
                     <span className="input-label">Возраст</span>
                     <input type="number" className="input-field" value={formData.age} onChange={e => setFormData(prev => ({ ...prev, age: e.target.value }))} required />
                   </div>
-                  <div className="input-group">
+                  <div className="input-group" style={{ marginBottom: 0, minWidth: 0 }}>
                     <span className="input-label">Рост (см)</span>
                     <input type="number" className="input-field" value={formData.height} onChange={e => setFormData(prev => ({ ...prev, height: e.target.value }))} required />
                   </div>
                 </div>
 
                 {user.gender === 'female' ? (
-                  <div className="input-group">
+                  <div className="input-group" style={{ marginBottom: 0 }}>
                     <span className="input-label">Вес (кг)</span>
                     <input type="number" className="input-field" value={formData.weight} onChange={e => setFormData(prev => ({ ...prev, weight: e.target.value }))} required />
                   </div>
                 ) : (
-                  <div className="input-group">
+                  <div className="input-group" style={{ marginBottom: 0 }}>
                     <span className="input-label">Доход (₽/мес)</span>
                     <input type="number" className="input-field" value={formData.income} onChange={e => setFormData(prev => ({ ...prev, income: e.target.value }))} required />
                   </div>
                 )}
 
-                <div className="input-group">
+                <div className="input-group" style={{ marginBottom: 0 }}>
                   <span className="input-label">О себе</span>
                   <textarea className="input-field" rows={2} value={formData.bio} onChange={e => setFormData(prev => ({ ...prev, bio: e.target.value }))} style={{ resize: 'none' }} />
                 </div>
@@ -255,16 +255,16 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
               </form>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%' }}>
+                  <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px', minWidth: 0 }}>
                     📏 <strong>Рост:</strong> {user.height} см
                   </div>
                   {user.gender === 'female' ? (
-                    <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
-                      秤 <strong>Вес:</strong> {user.weight} кг
+                    <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px', minWidth: 0 }}>
+                      ⚖️ <strong>Вес:</strong> {user.weight} кг
                     </div>
                   ) : (
-                    <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
+                    <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px', minWidth: 0 }}>
                       💰 <strong>Доход:</strong> {parseInt(user.income || 0).toLocaleString('ru-RU')} ₽
                     </div>
                   )}
