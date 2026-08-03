@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle, Trash2, Image as ImageIcon, Check } from 'lucide-react';
+import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle, Trash2, Image as ImageIcon, Check, Upload } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
 import { POPULAR_SETTLEMENTS } from '../utils/cities';
 
@@ -8,6 +8,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
   const [isEditing, setIsEditing] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [assetLoading, setAssetLoading] = useState(false);
   
   // Edit Form State
   const [formData, setFormData] = useState({
@@ -25,6 +26,8 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
   const [assetType, setAssetType] = useState('car'); // 'car' | 'estate'
   const [assetTitle, setAssetTitle] = useState('');
   const [assetPrice, setAssetPrice] = useState('');
+  const [assetPhoto, setAssetPhoto] = useState(null);
+  const [zoomAssetPhoto, setZoomAssetPhoto] = useState(null);
 
   // Review Report Modal
   const [reportReviewId, setReportReviewId] = useState(null);
@@ -156,30 +159,56 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
     }
   };
 
+  // Add Asset with Photo Support
   const handleAddAsset = async (e) => {
     e.preventDefault();
     if (!assetTitle || !assetPrice) return;
+    setAssetLoading(true);
 
-    const newAsset = {
-      id: Date.now(),
-      type: assetType,
-      title: assetTitle,
-      price: parseInt(assetPrice)
-    };
+    const formDataToSend = new FormData();
+    formDataToSend.append('type', assetType);
+    formDataToSend.append('title', assetTitle);
+    formDataToSend.append('price', assetPrice);
+    if (assetPhoto) {
+      formDataToSend.append('photo', assetPhoto);
+    }
 
-    const updatedAssets = [...(user.assets || []), newAsset];
     try {
-      const response = await fetch(`${API_URL}/api/assets/update`, {
+      const response = await fetch(`${API_URL}/api/assets/add`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ assets: updatedAssets })
+        headers: getAuthHeaders(),
+        body: formDataToSend
       });
       const result = await response.json();
-      if (response.ok) {
+      if (response.ok && result.user) {
         onUpdateUser(result.user);
         setShowAssetModal(false);
         setAssetTitle('');
         setAssetPrice('');
+        setAssetPhoto(null);
+      } else {
+        alert(result.error || 'Ошибка добавления имущества');
+      }
+    } catch (e) { 
+      console.error(e); 
+      alert('Ошибка при отправке фото имущества');
+    } finally {
+      setAssetLoading(false);
+    }
+  };
+
+  // Delete Asset Item
+  const handleDeleteAsset = async (assetId) => {
+    if (!window.confirm('Удалить это имущество?')) return;
+    try {
+      const response = await fetch(`${API_URL}/api/assets/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ assetId })
+      });
+      const result = await response.json();
+      if (response.ok && result.user) {
+        onUpdateUser(result.user);
       }
     } catch (e) { console.error(e); }
   };
@@ -279,7 +308,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
               Галерея ({user.photos?.length || 0})
             </button>
             <button onClick={() => setActiveTab('assets')} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: activeTab === 'assets' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
-              Имущество
+              Имущество ({user.assets?.length || 0})
             </button>
             <button onClick={() => setActiveTab('reviews')} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: activeTab === 'reviews' ? 'var(--color-accent)' : 'transparent', color: activeTab === 'reviews' ? '#000' : '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
               Отзывы ({reviews.length})
@@ -459,7 +488,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           </div>
         )}
 
-        {/* Tab 3: Assets Showcase (Cars & Real Estate) */}
+        {/* Tab 3: Assets Showcase (Cars & Real Estate with Photo Upload) */}
         {activeTab === 'assets' && (
           <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -471,21 +500,41 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
 
             {(!user.assets || user.assets.length === 0) ? (
               <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                У вас пока нет добавленных активов. Нажмите «Добавить», чтобы показать ваши автомобили или недвижимость!
+                У вас пока нет добавленных активов. Нажмите «Добавить», чтобы показать ваши автомобили или недвижимость с фото!
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {user.assets.map((item) => (
-                  <div key={item.id} className="glass" style={{ padding: '14px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: item.type === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {item.type === 'car' ? <Car size={20} color="#00f5d4" /> : <Home size={20} color="#a855f7" />}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <strong style={{ fontSize: '15px' }}>{item.title}</strong>
-                      <div style={{ fontSize: '12px', color: 'var(--color-accent)', marginTop: '2px' }}>
-                        ~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽
+                  <div key={item.id} className="glass" style={{ padding: '14px', borderRadius: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: item.type === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.type === 'car' ? <Car size={20} color="#00f5d4" /> : <Home size={20} color="#a855f7" />}
                       </div>
+                      
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ fontSize: '15px' }}>{item.title}</strong>
+                        <div style={{ fontSize: '12px', color: 'var(--color-accent)', marginTop: '2px' }}>
+                          ~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽
+                        </div>
+                      </div>
+
+                      <button onClick={() => handleDeleteAsset(item.id)} style={{ background: 'rgba(255,95,95,0.15)', border: 'none', color: '#ff5f5f', padding: '6px 10px', borderRadius: '10px', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Trash2 size={12} /> Удалить
+                      </button>
                     </div>
+
+                    {/* Render Uploaded Asset Photo if available */}
+                    {item.photo && (
+                      <div 
+                        onClick={() => setZoomAssetPhoto(getPhotoUrl(item.photo))}
+                        style={{ position: 'relative', height: '160px', borderRadius: '14px', overflow: 'hidden', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}
+                      >
+                        <img src={getPhotoUrl(item.photo)} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '10px', padding: '3px 8px', borderRadius: '8px', backdropFilter: 'blur(4px)' }}>
+                          🔍 Нажмите для увеличения
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -536,11 +585,11 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
 
       </div>
 
-      {/* Add Asset Modal */}
+      {/* Add Asset Modal with Photo Upload Input */}
       {showAssetModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <h3 style={{ fontSize: '18px' }}>Добавить Имущество</h3>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <h3 style={{ fontSize: '18px' }}>Добавить Имущество 🏎️🏠</h3>
             
             <form onSubmit={handleAddAsset} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="input-group">
@@ -553,19 +602,48 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
 
               <div className="input-group">
                 <span className="input-label">Название / Модель *</span>
-                <input type="text" placeholder="например: BMW M5 или Квартира 100м²" className="input-field" value={assetTitle} onChange={e => setAssetTitle(e.target.value)} required />
+                <input type="text" placeholder="например: Porsche 911 GT3 или Квартира 120м²" className="input-field" value={assetTitle} onChange={e => setAssetTitle(e.target.value)} required />
               </div>
 
               <div className="input-group">
                 <span className="input-label">Примерная стоимость (₽) *</span>
-                <input type="number" placeholder="5000000" className="input-field" value={assetPrice} onChange={e => setAssetPrice(e.target.value)} required />
+                <input type="number" placeholder="15000000" className="input-field" value={assetPrice} onChange={e => setAssetPrice(e.target.value)} required />
+              </div>
+
+              {/* Photo File Field for Asset */}
+              <div className="input-group">
+                <span className="input-label">Фотография имущества 📸</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="input-field" 
+                  onChange={e => setAssetPhoto(e.target.files[0])} 
+                  style={{ padding: '8px' }}
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Прикрепите реальное фото Вашего автомобиля или недвижимости
+                </span>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                <button type="button" onClick={() => setShowAssetModal(false)} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>Отмена</button>
-                <button type="submit" className="btn btn-accent" style={{ flex: 1, padding: '12px' }}>Добавить</button>
+                <button type="button" onClick={() => { setShowAssetModal(false); setAssetPhoto(null); }} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>Отмена</button>
+                <button type="submit" className="btn btn-accent" disabled={assetLoading} style={{ flex: 1, padding: '12px' }}>
+                  {assetLoading ? 'Загрузка...' : 'Добавить'}
+                </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Asset Photo Lightbox Zoom Modal */}
+      {zoomAssetPhoto && (
+        <div onClick={() => setZoomAssetPhoto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(10px)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ position: 'relative', maxWidth: '420px', width: '100%' }} onClick={e => e.stopPropagation()}>
+            <img src={zoomAssetPhoto} alt="Увеличенное фото имущества" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '16px', border: '2px solid var(--color-primary)' }} />
+            <button onClick={() => setZoomAssetPhoto(null)} className="btn btn-secondary" style={{ position: 'absolute', top: '-40px', right: 0, padding: '6px 12px', borderRadius: '12px', fontSize: '12px' }}>
+              ✕ Закрыть
+            </button>
           </div>
         </div>
       )}

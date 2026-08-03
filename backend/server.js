@@ -380,7 +380,53 @@ app.post('/api/profile/photos/delete', async (req, res) => {
   }
 });
 
-// Asset Showcase Endpoint (Cars & Real Estate - Requirement #12)
+// Asset Showcase Endpoints with Photo Upload (Cars & Real Estate - Requirement #12)
+app.post('/api/assets/add', upload.single('photo'), async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+    const user = await db.getUser(tgUser.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    const { type, title, price } = req.body;
+    if (!title || !price) return res.status(400).json({ error: 'Укажите название и примерную стоимость' });
+
+    const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const newAsset = {
+      id: Date.now(),
+      type: type || 'car',
+      title: title.trim(),
+      price: parseInt(price),
+      photo: photoUrl
+    };
+
+    const updatedAssets = [...(user.assets || []), newAsset];
+    const updated = await db.updateUser(user.id, { assets: updatedAssets });
+
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    console.error('POST /api/assets/add error:', err);
+    res.status(500).json({ error: 'Ошибка при добавлении имущества' });
+  }
+});
+
+app.post('/api/assets/delete', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+    const user = await db.getUser(tgUser.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    const { assetId } = req.body;
+    const updatedAssets = (user.assets || []).filter(a => String(a.id) !== String(assetId));
+    const updated = await db.updateUser(user.id, { assets: updatedAssets });
+
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка удаления имущества' });
+  }
+});
+
 app.post('/api/assets/update', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
