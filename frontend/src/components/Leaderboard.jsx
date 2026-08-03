@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Crown, Heart, DollarSign, MapPin, Sparkles, Medal } from 'lucide-react';
-
-const CITIES = ['Все города', 'Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Нижний Новгород', 'Сочи'];
+import { POPULAR_SETTLEMENTS } from '../utils/cities';
 
 export default function Leaderboard({ user, API_URL, tgUserId }) {
   const [tab, setTab] = useState('male'); // 'male' (income) | 'female' (likes)
-  const [selectedCity, setSelectedCity] = useState('Все города');
+  const [selectedCity, setSelectedCity] = useState('Все населенные пункты');
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +23,8 @@ export default function Leaderboard({ user, API_URL, tgUserId }) {
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      const cityParam = selectedCity !== 'Все города' ? `&city=${encodeURIComponent(selectedCity)}` : '';
+      const isAll = selectedCity === 'Все населенные пункты' || selectedCity === 'Все города' || !selectedCity.trim();
+      const cityParam = !isAll ? `&city=${encodeURIComponent(selectedCity.trim())}` : '';
       const response = await fetch(`${API_URL}/api/leaderboard?gender=${tab}${cityParam}`, {
         headers: getAuthHeaders()
       });
@@ -57,10 +57,10 @@ export default function Leaderboard({ user, API_URL, tgUserId }) {
             <Trophy size={30} color="#ffd700" />
           </div>
           <h2 style={{ fontSize: '24px', background: 'linear-gradient(135deg, #ffd700, #ff8c00)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Топ Анкет ScaleMate 🏆
+            Топ Анкет России 🏆
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-            Рейтинг самых лучших профилей сервиса
+            Рейтинг лучших профилей в любом городе, селе и деревне
           </p>
         </div>
 
@@ -109,39 +109,30 @@ export default function Leaderboard({ user, API_URL, tgUserId }) {
           </button>
         </div>
 
-        {/* City Filter Pills */}
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-          {CITIES.map(c => (
-            <button
-              key={c}
-              onClick={() => setSelectedCity(c)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '20px',
-                border: selectedCity === c ? '1px solid var(--color-accent)' : '1px solid rgba(255,255,255,0.08)',
-                background: selectedCity === c ? 'rgba(0, 245, 212, 0.15)' : 'rgba(255,255,255,0.03)',
-                color: selectedCity === c ? 'var(--color-accent)' : 'var(--text-muted)',
-                fontSize: '12px',
-                whiteSpace: 'nowrap',
-                cursor: 'pointer',
-                fontWeight: selectedCity === c ? '700' : '400'
-              }}
-            >
-              <MapPin size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-              {c}
-            </button>
-          ))}
+        {/* Searchable Settlement Input + Datalist */}
+        <div className="input-group">
+          <span className="input-label"><MapPin size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Фильтр по населенному пункту</span>
+          <input 
+            type="text"
+            list="leaderboard-settlements-datalist"
+            placeholder="Поиск города, села или деревни..."
+            className="input-field"
+            value={selectedCity}
+            onChange={(e) => setSelectedCity(e.target.value)}
+          />
+          <datalist id="leaderboard-settlements-datalist">
+            <option value="Все населенные пункты" />
+            {POPULAR_SETTLEMENTS.map(c => <option key={c} value={c} />)}
+          </datalist>
         </div>
 
         {/* Leaderboard List */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-            Загрузка лидеров...
-          </div>
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Загрузка лидеров...</div>
         ) : leaders.length === 0 ? (
           <div className="glass-premium" style={{ padding: '30px', textAlign: 'center', borderRadius: '24px', color: 'var(--text-muted)' }}>
             <Sparkles size={32} style={{ margin: 'auto', marginBottom: '10px' }} />
-            <p>В этом городе пока нет лидеров. Будьте первыми!</p>
+            <p>В выбранном населенном пункте пока нет лидеров. Будьте первыми!</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -165,12 +156,10 @@ export default function Leaderboard({ user, API_URL, tgUserId }) {
                     background: isTop1 ? 'linear-gradient(135deg, rgba(255, 215, 0, 0.08), rgba(16, 12, 28, 0.9))' : 'rgba(255,255,255,0.03)'
                   }}
                 >
-                  {/* Rank Badge */}
                   <div style={{ width: '32px', textAlign: 'center', fontWeight: '800', fontSize: '16px' }}>
                     {isTop1 ? '🥇' : isTop2 ? '🥈' : isTop3 ? '🥉' : `#${rank}`}
                   </div>
 
-                  {/* Avatar */}
                   <img 
                     src={getPhotoUrl(item.photos?.[0])} 
                     alt={item.name}
@@ -183,7 +172,6 @@ export default function Leaderboard({ user, API_URL, tgUserId }) {
                     }} 
                   />
 
-                  {/* Details */}
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <strong style={{ fontSize: '16px' }}>{item.name}, {item.age}</strong>
@@ -194,7 +182,6 @@ export default function Leaderboard({ user, API_URL, tgUserId }) {
                     </div>
                   </div>
 
-                  {/* Parameter Badge */}
                   <div style={{ textAlign: 'right' }}>
                     {tab === 'male' ? (
                       <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--color-accent)' }}>

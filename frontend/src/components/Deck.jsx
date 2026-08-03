@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, X, MessageSquare, Scale, Check, Sliders, RotateCcw, Send, Sparkles, ShieldCheck, MapPin, User, ChevronLeft, ChevronRight, Share2, DollarSign, Star, Car, Home } from 'lucide-react';
-
-const CITIES = ['Все города', 'Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Нижний Новгород', 'Сочи'];
+import { POPULAR_SETTLEMENTS } from '../utils/cities';
 
 export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   const [feed, setFeed] = useState([]);
@@ -19,13 +18,13 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
     minWeight: 35,
     maxWeight: 120,
     minIncome: 0,
-    city: 'Все города'
+    city: 'Все населенные пункты'
   });
 
   // Match state
   const [matchData, setMatchData] = useState(null);
 
-  // Detailed User Profile Modal (Requirement #17)
+  // Detailed User Profile Modal
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [modalUser, setModalUser] = useState(null);
   const [modalPhotoIndex, setModalPhotoIndex] = useState(0);
@@ -65,7 +64,9 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
       if (filters.minWeight) queryParams.append('minWeight', filters.minWeight);
       if (filters.maxWeight) queryParams.append('maxWeight', filters.maxWeight);
       if (filters.minIncome) queryParams.append('minIncome', filters.minIncome);
-      if (filters.city && filters.city !== 'Все города') queryParams.append('city', filters.city);
+      if (filters.city && filters.city !== 'Все населенные пункты' && filters.city !== 'Все города') {
+        queryParams.append('city', filters.city);
+      }
 
       const response = await fetch(`${API_URL}/api/cards?${queryParams.toString()}`, {
         headers: getAuthHeaders()
@@ -153,7 +154,7 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   };
 
   const handleShareApp = () => {
-    const text = encodeURIComponent('Присоединяйся к ScaleMate — честные знакомства с верификацией веса и дохода!');
+    const text = encodeURIComponent('Присоединяйся к ScaleMate — честные знакомства с верификацией по всей России!');
     const url = encodeURIComponent('https://t.me/scalemate_bot');
     window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
   };
@@ -194,7 +195,7 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
 
-      {/* Advanced Filters Modal (Requirement #5) */}
+      {/* Advanced Filters Modal with Settlement Autocomplete */}
       {showFilters && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -203,11 +204,21 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               <button onClick={() => setShowFilters(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
+            {/* Any Settlement / Region Search Input */}
             <div className="input-group">
-              <span className="input-label">Город</span>
-              <select className="input-field" value={filters.city} onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} style={{ appearance: 'none', background: 'rgba(255,255,255,0.04)' }}>
-                {CITIES.map(c => <option key={c} value={c} style={{ background: 'var(--bg-secondary)' }}>{c}</option>)}
-              </select>
+              <span className="input-label">Населенный пункт / Регион</span>
+              <input 
+                type="text"
+                list="deck-settlements-datalist"
+                placeholder="Все населенные пункты"
+                className="input-field" 
+                value={filters.city} 
+                onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} 
+              />
+              <datalist id="deck-settlements-datalist">
+                <option value="Все населенные пункты" />
+                {POPULAR_SETTLEMENTS.map(c => <option key={c} value={c} />)}
+              </datalist>
             </div>
 
             <div className="input-group">
@@ -248,7 +259,7 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
         </div>
       )}
 
-      {/* Detailed Profile Modal (Requirement #17) */}
+      {/* Detailed Profile Modal */}
       {showProfileModal && modalUser && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div className="glass-premium" style={{ width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -258,7 +269,6 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               <button onClick={() => setShowProfileModal(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={22} /></button>
             </div>
 
-            {/* Photo Gallery Carousel Slider */}
             <div style={{ position: 'relative', width: '100%', height: '320px', borderRadius: '20px', overflow: 'hidden' }}>
               <img src={getPhotoUrl(modalUser.photos?.[modalPhotoIndex])} alt={modalUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               {modalUser.photos?.length > 1 && (
@@ -273,7 +283,6 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               )}
             </div>
 
-            {/* Trust Meter Score */}
             <div className="glass" style={{ padding: '14px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Уровень доверия (Trust Score)</span>
@@ -284,10 +293,9 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               </div>
             </div>
 
-            {/* Main Parameters */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div className="glass" style={{ padding: '10px', borderRadius: '14px', fontSize: '13px' }}>
-                📍 <strong>Город:</strong> {modalUser.city || 'Москва'}
+                📍 <strong>Населенный пункт:</strong> {modalUser.city || 'Москва'}
               </div>
               <div className="glass" style={{ padding: '10px', borderRadius: '14px', fontSize: '13px' }}>
                 📏 <strong>Рост:</strong> {modalUser.height} см
@@ -306,13 +314,11 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               </div>
             </div>
 
-            {/* Bio */}
             <div>
               <h4 style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>О себе</h4>
               <p style={{ fontSize: '14px', lineHeight: '1.4' }}>{modalUser.bio || 'Пользователь пока не добавил описание.'}</p>
             </div>
 
-            {/* Assets Showcase */}
             {modalUser.assets && modalUser.assets.length > 0 && (
               <div>
                 <h4 style={{ fontSize: '14px', color: 'var(--color-accent)', marginBottom: '8px' }}>🏎️ Недвижимость и Автомобили</h4>
@@ -330,7 +336,6 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               </div>
             )}
 
-            {/* Reviews Section */}
             <div>
               <h4 style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '8px' }}>Отзывы встречавшихся ({modalReviews.length})</h4>
               {modalReviews.length === 0 ? (
@@ -418,7 +423,6 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               </div>
             </div>
 
-            {/* Action Buttons: Dislike - Profile Modal - Direct Message - Like */}
             <div className="swipe-buttons" style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '12px' }}>
               <button onClick={() => handleSwipe('dislike')} className="swipe-btn dislike" title="Пропустить">
                 <X size={26} />
@@ -438,14 +442,13 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
             </div>
           </div>
         ) : (
-          /* Empty Deck State with Working Share Link (Requirement #21) */
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '20px' }}>
             <div style={{ display: 'inline-flex', padding: '16px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.03)', marginBottom: '15px' }}>
               <Sparkles size={36} color="var(--color-primary)" />
             </div>
             <h3>Анкеты пока закончились</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '8px', maxWidth: '260px' }}>
-              Вы просмотрели все доступные анкеты в этом городе. Обновите ленту или пригласите друзей!
+              Вы просмотрели доступные анкеты. Попробуйте обновить фильтр или пригласить друзей!
             </p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px', width: '100%', maxWidth: '260px' }}>

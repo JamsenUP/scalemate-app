@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
-
-const CITIES_PRESETS = ['Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Нижний Новгород', 'Сочи', 'Краснодар', 'Уфа', 'Самара'];
+import { POPULAR_SETTLEMENTS } from '../utils/cities';
 
 export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, onUpdateUser, API_URL, tgUserId }) {
   const [activeTab, setActiveTab] = useState('info'); // 'info' | 'assets' | 'reviews'
@@ -69,7 +68,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           height: parseInt(formData.height),
           weight: parseFloat(formData.weight),
           income: parseInt(formData.income),
-          city: formData.city,
+          city: formData.city.trim(),
           bio: formData.bio
         })
       });
@@ -161,7 +160,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           <h2 style={{ fontSize: '22px', marginBottom: '4px' }}>{user.name}, {user.age}</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '12px' }}>📍 {user.city || 'Москва'}</p>
 
-          {/* Trust Score 0-100% Bar (Requirement #7) */}
+          {/* Trust Score 0-100% Bar */}
           <div style={{ background: 'rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '16px', maxWidth: '280px', margin: 'auto', marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Рейтинг Доверия:</span>
@@ -207,10 +206,19 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                 </div>
 
                 <div className="input-group">
-                  <span className="input-label">Город</span>
-                  <select className="input-field" value={formData.city} onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))} style={{ appearance: 'none', background: 'rgba(255,255,255,0.04)' }}>
-                    {CITIES_PRESETS.map(c => <option key={c} value={c} style={{ background: 'var(--bg-secondary)' }}>{c}</option>)}
-                  </select>
+                  <span className="input-label">Населенный пункт (город, село, деревня)</span>
+                  <input 
+                    type="text"
+                    list="profile-settlements-datalist"
+                    placeholder="Введите населенный пункт..."
+                    className="input-field" 
+                    value={formData.city} 
+                    onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))} 
+                    required 
+                  />
+                  <datalist id="profile-settlements-datalist">
+                    {POPULAR_SETTLEMENTS.map(c => <option key={c} value={c} />)}
+                  </datalist>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -253,7 +261,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                   </div>
                   {user.gender === 'female' ? (
                     <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
-                      ⚖️ <strong>Вес:</strong> {user.weight} кг
+                      秤 <strong>Вес:</strong> {user.weight} кг
                     </div>
                   ) : (
                     <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
@@ -289,7 +297,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           </div>
         )}
 
-        {/* Tab 2: Assets Showcase (Cars & Real Estate - Requirement #12) */}
+        {/* Tab 2: Assets Showcase (Cars & Real Estate) */}
         {activeTab === 'assets' && (
           <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -323,7 +331,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           </div>
         )}
 
-        {/* Tab 3: Avito-style User Reviews (Requirement #23) */}
+        {/* Tab 3: Avito-style User Reviews */}
         {activeTab === 'reviews' && (
           <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <h3 style={{ fontSize: '16px' }}>Отзывы пользователей ⭐</h3>

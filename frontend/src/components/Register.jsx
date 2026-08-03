@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { User, Calendar, Ruler, Scale, FileText, Heart, Camera, LogIn, UserPlus, MapPin, DollarSign } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
+import { POPULAR_SETTLEMENTS } from '../utils/cities';
 
-const CITIES_PRESETS = ['Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Нижний Новгород', 'Сочи', 'Краснодар', 'Уфа', 'Самара'];
+const QUICK_SETTLEMENTS = ['Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Краснодар', 'Сочи', 'Владивосток'];
 
 export default function Register({ onRegister, API_URL, tgUserId }) {
   const [activeTab, setActiveTab] = useState('register'); // 'register' | 'login'
@@ -148,6 +149,11 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
       return;
     }
 
+    if (!formData.city || !formData.city.trim()) {
+      setError('Укажите ваш населенный пункт (город, село, деревня).');
+      return;
+    }
+
     if (!formData.age || !formData.height) {
       setError('Пожалуйста, заполните все обязательные поля.');
       return;
@@ -169,7 +175,7 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
     data.append('height', formData.height);
     data.append('weight', formData.weight);
     data.append('income', formData.income);
-    data.append('city', formData.city);
+    data.append('city', formData.city.trim());
     data.append('bio', formData.bio);
 
     for (const photo of photos) {
@@ -219,7 +225,7 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
             ScaleMate
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-            Знакомства на честных условиях!
+            Знакомства по всей России!
           </p>
         </div>
 
@@ -298,13 +304,45 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
               </span>
             </div>
 
+            {/* Any Settlement Input with Autocomplete & Presets */}
             <div className="input-group">
-              <span className="input-label"><MapPin size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваш Город *</span>
-              <select name="city" className="input-field" value={formData.city} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
-                {CITIES_PRESETS.map(c => (
-                  <option key={c} value={c} style={{ background: 'var(--bg-secondary)' }}>{c}</option>
+              <span className="input-label"><MapPin size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Населенный пункт (город, село, деревня) *</span>
+              <input 
+                type="text"
+                name="city"
+                list="settlements-datalist"
+                placeholder="Введите ваш город, село или деревню..."
+                className="input-field"
+                value={formData.city}
+                onChange={handleInputChange}
+                required
+              />
+              <datalist id="settlements-datalist">
+                {POPULAR_SETTLEMENTS.map(s => <option key={s} value={s} />)}
+              </datalist>
+
+              {/* Quick settlement pills */}
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingTop: '4px' }}>
+                {QUICK_SETTLEMENTS.map(qs => (
+                  <button
+                    key={qs}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, city: qs }))}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      border: formData.city === qs ? '1px solid var(--color-accent)' : '1px solid rgba(255,255,255,0.08)',
+                      background: formData.city === qs ? 'rgba(0, 245, 212, 0.15)' : 'rgba(255,255,255,0.03)',
+                      color: formData.city === qs ? 'var(--color-accent)' : 'var(--text-muted)',
+                      fontSize: '11px',
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {qs}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
