@@ -19,7 +19,8 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Rate Limiter against DDoS & Spam
 const apiLimiter = rateLimit({
@@ -50,13 +51,13 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// Ensure uploads folder exists
+// Ensure uploads folder exists for temporary staging
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Serve uploaded images static files
+// Serve uploaded images static files (legacy fallback)
 app.use('/uploads', express.static(uploadsDir));
 
 // Multer configuration for file uploads
@@ -72,8 +73,26 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 15 * 1024 * 1024 } // 15MB limit
 });
+
+// Permanent Storage Helper: Convert uploaded file to Base64 Data URL stored directly in PostgreSQL DB
+function fileToPermanentUrl(file) {
+  if (!file) return null;
+  try {
+    const filePath = file.path;
+    if (filePath && fs.existsSync(filePath)) {
+      const buffer = fs.readFileSync(filePath);
+      const mime = file.mimetype || 'image/jpeg';
+      // Clean up temporary local file to keep container filesystem lean
+      fs.unlink(filePath, () => {});
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    }
+  } catch (err) {
+    console.error('fileToPermanentUrl error:', err);
+  }
+  return `/uploads/${file.filename}`;
+}
 
 // Helper: Validate First Name (Requirement #15)
 function validateFirstName(name) {
@@ -180,7 +199,7 @@ app.get('/api/profile', async (req, res) => {
         telegramId: String(tgUser.id), username: tgUser.username || 'admin',
         name: 'admin', age: 22, gender: 'male', preferredGender: 'all',
         height: 250, weight: 250, bmi: 40.0, city: 'Москва', bio: 'Главный Администратор Модерации 👑',
-        photos: ['/uploads/bob.jpg'], isVerified: true, verificationStatus: 'approved',
+        photos: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400'], isVerified: true, verificationStatus: 'approved',
         isAdmin: true, verificationDate: new Date().toISOString()
       });
     }
@@ -227,7 +246,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 2. Register Profile
+// 2. Register Profile with Permanent Base64 Photo Storage
 app.post('/api/register', upload.array('photos', 5), async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
@@ -245,7 +264,7 @@ app.post('/api/register', upload.array('photos', 5), async (req, res) => {
       return res.status(400).json({ error: 'Не все обязательные поля заполнены.' });
     }
 
-    const photoUrls = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
+    const photoUrls = req.files ? req.files.map(fileToPermanentUrl).filter(Boolean) : [];
     if (photoUrls.length === 0) {
       return res.status(400).json({ error: 'Необходимо загрузить хотя бы 1 фотографию профиля.' });
     }
@@ -273,7 +292,7 @@ app.post('/api/register', upload.array('photos', 5), async (req, res) => {
   }
 });
 
-// 2.5 Edit Profile
+// 2.5 Edit Profile with Permanent Base64 Photo Storage
 app.post('/api/profile/edit', upload.array('photos', 5), async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
@@ -298,7 +317,7 @@ app.post('/api/profile/edit', upload.array('photos', 5), async (req, res) => {
     if (income !== undefined) updates.income = parseInt(income);
 
     if (req.files && req.files.length > 0) {
-      const newPhotoUrls = req.files.map(f => `/uploads/${f.filename}`);
+      const newPhotoUrls = req.files.map(fileToPermanentUrl).filter(Boolean);
       updates.photos = [...(user.photos || []), ...newPhotoUrls];
     }
 
@@ -310,7 +329,7 @@ app.post('/api/profile/edit', upload.array('photos', 5), async (req, res) => {
   }
 });
 
-// 2.6 Photo Management Endpoints
+// 2.6 Photo Management Endpoints (Add, Set Avatar, Delete)
 app.post('/api/profile/photos/add', upload.array('photos', 5), async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
@@ -322,7 +341,7 @@ app.post('/api/profile/photos/add', upload.array('photos', 5), async (req, res) 
       return res.status(400).json({ error: 'Загрузите хотя бы одно фото' });
     }
 
-    const newPhotos = req.files.map(f => `/uploads/${f.filename}`);
+    const newPhotos = req.files.map(fileToPermanentUrl).filter(Boolean);
     const updatedPhotos = [...(user.photos || []), ...newPhotos];
     const updated = await db.updateUser(user.id, { photos: updatedPhotos });
 
@@ -391,7 +410,7 @@ app.post('/api/assets/add', upload.single('photo'), async (req, res) => {
     const { type, title, price } = req.body;
     if (!title || !price) return res.status(400).json({ error: 'Укажите название и примерную стоимость' });
 
-    const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const photoUrl = req.file ? fileToPermanentUrl(req.file) : null;
     const newAsset = {
       id: Date.now(),
       type: type || 'car',
@@ -461,11 +480,14 @@ app.post('/api/verify-weight', upload.fields([
     const selfiePhotoPath = files.selfiePhoto ? files.selfiePhoto[0].path : null;
     const verificationResult = await verifyWeightWithAI(scalePhotoPath, selfiePhotoPath, user.weight);
 
+    const scalePhotoUrl = fileToPermanentUrl(files.scalePhoto[0]);
+    const selfiePhotoUrl = files.selfiePhoto ? fileToPermanentUrl(files.selfiePhoto[0]) : null;
+
     if (verificationResult.success) {
       const updatedUser = await db.updateUser(user.id, {
         isVerified: true, weight: verificationResult.detectedWeight || user.weight,
-        verificationPhoto: `/uploads/${files.scalePhoto[0].filename}`,
-        verificationSelfie: selfiePhotoPath ? `/uploads/${files.selfiePhoto[0].filename}` : null,
+        verificationPhoto: scalePhotoUrl,
+        verificationSelfie: selfiePhotoUrl,
         verificationDate: new Date().toISOString()
       });
       res.json({ success: true, message: 'Вес успешно верифицирован!', user: updatedUser });
@@ -487,7 +509,7 @@ app.post('/api/request-moderation', upload.single('fullBodyPhoto'), async (req, 
     const user = await db.getUser(tgUser.id);
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
-    const photoUrl = req.file ? `/uploads/${req.file.filename}` : (user.photos?.[0] || null);
+    const photoUrl = req.file ? fileToPermanentUrl(req.file) : (user.photos?.[0] || null);
 
     const updatedUser = await db.updateUser(user.id, {
       verificationPhoto: photoUrl,
@@ -512,7 +534,7 @@ app.post('/api/verify-income', upload.single('incomePhoto'), async (req, res) =>
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
     const incomeVal = req.body.income ? parseInt(req.body.income) : (user.income || 0);
-    const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const photoUrl = req.file ? fileToPermanentUrl(req.file) : null;
 
     const updatedUser = await db.updateUser(user.id, {
       income: incomeVal,
@@ -735,7 +757,7 @@ app.post('/api/stories', upload.single('photo'), async (req, res) => {
     const { partnerName, story, rating } = req.body;
     if (!story || !story.trim()) return res.status(400).json({ error: 'Напишите историю свидания' });
 
-    const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const photoUrl = req.file ? fileToPermanentUrl(req.file) : null;
     const newStory = await db.addDateStory(user, partnerName || 'Партнер', story, rating, photoUrl);
 
     res.json({ success: true, story: newStory });
@@ -776,7 +798,7 @@ app.post('/api/reviews', upload.single('photo'), async (req, res) => {
       return res.status(403).json({ error: 'Оставить отзыв можно только пользователю, с которым вы общались в чате!' });
     }
 
-    const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const photoUrl = req.file ? fileToPermanentUrl(req.file) : null;
     const review = await db.addUserReview(targetUserId, reviewer, rating, comment, photoUrl);
 
     res.json({ success: true, review });

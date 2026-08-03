@@ -230,8 +230,17 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
   };
 
   const getPhotoUrl = (p) => {
-    if (!p) return 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
-    return p.startsWith('http') ? p : API_URL + p;
+    const defaultFallback = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+    if (!p) return defaultFallback;
+    if (typeof p === 'string' && (p.startsWith('http') || p.startsWith('data:'))) {
+      return p;
+    }
+    return API_URL + p;
+  };
+
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
   };
 
   return (
@@ -247,6 +256,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           <div style={{ position: 'relative', width: '104px', height: '104px', margin: 'auto', marginBottom: '14px' }}>
             <img 
               src={getPhotoUrl(user.photos?.[0])} 
+              onError={handleImageError}
               alt={user.name} 
               style={{ width: '104px', height: '104px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-primary)' }}
             />
@@ -455,7 +465,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                 const isMain = idx === 0;
                 return (
                   <div key={idx} className="glass" style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', height: '180px', display: 'flex', flexDirection: 'column' }}>
-                    <img src={getPhotoUrl(photoUrl)} alt={`Фото ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={getPhotoUrl(photoUrl)} onError={handleImageError} alt={`Фото ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     
                     {/* Main Avatar Badge or Set Main Button */}
                     <div style={{ position: 'absolute', top: '8px', left: '8px', right: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -529,7 +539,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                         onClick={() => setZoomAssetPhoto(getPhotoUrl(item.photo))}
                         style={{ position: 'relative', height: '160px', borderRadius: '14px', overflow: 'hidden', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}
                       >
-                        <img src={getPhotoUrl(item.photo)} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={getPhotoUrl(item.photo)} onError={handleImageError} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         <div style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '10px', padding: '3px 8px', borderRadius: '8px', backdropFilter: 'blur(4px)' }}>
                           🔍 Нажмите для увеличения
                         </div>
@@ -557,7 +567,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
                   <div key={r.id} className="glass" style={{ padding: '14px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <img src={getPhotoUrl(r.reviewer_photo)} alt={r.reviewer_name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={getPhotoUrl(r.reviewer_photo)} onError={handleImageError} alt={r.reviewer_name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                         <strong style={{ fontSize: '14px' }}>{r.reviewer_name}</strong>
                       </div>
                       
@@ -640,7 +650,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
       {zoomAssetPhoto && (
         <div onClick={() => setZoomAssetPhoto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(10px)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ position: 'relative', maxWidth: '420px', width: '100%' }} onClick={e => e.stopPropagation()}>
-            <img src={zoomAssetPhoto} alt="Увеличенное фото имущества" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '16px', border: '2px solid var(--color-primary)' }} />
+            <img src={zoomAssetPhoto} onError={handleImageError} alt="Увеличенное фото имущества" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '16px', border: '2px solid var(--color-primary)' }} />
             <button onClick={() => setZoomAssetPhoto(null)} className="btn btn-secondary" style={{ position: 'absolute', top: '-40px', right: 0, padding: '6px 12px', borderRadius: '12px', fontSize: '12px' }}>
               ✕ Закрыть
             </button>
