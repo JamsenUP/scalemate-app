@@ -75,9 +75,79 @@ export async function initDB() {
         timestamp TIMESTAMPTZ DEFAULT NOW()
       );
 
+      -- Columns added in migrations
       ALTER TABLE users ADD COLUMN IF NOT EXISTS income INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Москва';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS warnings_count INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_reason TEXT DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS trust_score INTEGER DEFAULT 50;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS assets JSONB DEFAULT '[]';
+
+      -- New tables
+      CREATE TABLE IF NOT EXISTS banned_ips (
+        ip TEXT PRIMARY KEY,
+        reason TEXT DEFAULT '',
+        banned_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS date_stories (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        user_photo TEXT,
+        partner_name TEXT,
+        story TEXT NOT NULL,
+        rating INTEGER DEFAULT 5,
+        photo TEXT,
+        city TEXT DEFAULT 'Москва',
+        likes_count INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS user_reviews (
+        id SERIAL PRIMARY KEY,
+        target_user_id TEXT NOT NULL,
+        reviewer_id TEXT NOT NULL,
+        reviewer_name TEXT,
+        reviewer_photo TEXT,
+        rating INTEGER DEFAULT 5,
+        comment TEXT NOT NULL,
+        photo TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS review_reports (
+        id SERIAL PRIMARY KEY,
+        review_id INTEGER NOT NULL,
+        reporter_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS scheduled_dates (
+        id SERIAL PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        receiver_id TEXT NOT NULL,
+        location_name TEXT NOT NULL,
+        yandex_map_url TEXT,
+        date_time TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Indexes for performance
+      CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
+      CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender);
+      CREATE INDEX IF NOT EXISTS idx_users_income ON users(income);
+      CREATE INDEX IF NOT EXISTS idx_users_weight ON users(weight);
+      CREATE INDEX IF NOT EXISTS idx_likes_to_id ON likes(to_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
     `);
-    console.log('✅ PostgreSQL tables initialized');
+    console.log('✅ PostgreSQL tables and schemas initialized');
   } finally {
     client.release();
   }
@@ -87,6 +157,16 @@ function calcBmi(height, weight) {
   if (!height || !weight) return null;
   const h = height / 100;
   return parseFloat((weight / (h * h)).toFixed(1));
+}
+
+function calcTrustScore(row) {
+  let score = 30; // base score
+  if (row.is_verified) score += 35;
+  if (row.is_face_verified) score += 15;
+  if (row.photos && row.photos.length > 0) score += Math.min(row.photos.length * 5, 10);
+  if (row.city) score += 5;
+  if (row.warnings_count && row.warnings_count > 0) score -= row.warnings_count * 20;
+  return Math.max(0, Math.min(100, score));
 }
 
 function rowToUser(row) {
@@ -103,6 +183,13 @@ function rowToUser(row) {
     weight: row.weight,
     bmi: row.bmi,
     income: row.income || 0,
+    city: row.city || 'Москва',
+    warningsCount: row.warnings_count || 0,
+    isBanned: row.is_banned || false,
+    banReason: row.ban_reason || '',
+    lastSeenAt: row.last_seen_at || row.created_at,
+    trustScore: calcTrustScore(row),
+    assets: row.assets || [],
     bio: row.bio || '',
     photos: row.photos || [],
     isVerified: row.is_verified,
@@ -130,6 +217,7 @@ function rowToLike(row) {
 function rowToMessage(row) {
   if (!row) return null;
   return {
+    id: row.id,
     chatId: row.chat_id,
     senderId: row.sender_id,
     text: row.text,
@@ -180,16 +268,17 @@ export async function getUsers() {
 export async function createUser(user) {
   const id = user.telegramId || String(Date.now());
   const bmi = calcBmi(user.height, user.weight);
+  const city = user.city || 'Москва';
   const res = await pool.query(
     `INSERT INTO users (
       id, telegram_id, username, name, age, gender, preferred_gender,
       height, weight, bmi, bio, photos, is_verified, verification_photo,
       verification_selfie, verification_status, verification_date,
-      is_admin, is_face_verified
+      is_admin, is_face_verified, income, city
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7,
       $8, $9, $10, $11, $12, $13, $14,
-      $15, $16, $17, $18, $19
+      $15, $16, $17, $18, $19, $20, $21
     )
     ON CONFLICT (telegram_id) DO UPDATE SET
       username = EXCLUDED.username,
@@ -205,7 +294,9 @@ export async function createUser(user) {
       is_verified = EXCLUDED.is_verified,
       verification_status = EXCLUDED.verification_status,
       is_admin = EXCLUDED.is_admin,
-      verification_date = EXCLUDED.verification_date
+      verification_date = EXCLUDED.verification_date,
+      income = EXCLUDED.income,
+      city = EXCLUDED.city
     RETURNING *`,
     [
       id,
@@ -226,7 +317,9 @@ export async function createUser(user) {
       user.verificationStatus || 'none',
       user.verificationDate || null,
       user.isAdmin || false,
-      user.isFaceVerified || false
+      user.isFaceVerified || false,
+      parseInt(user.income) || 0,
+      city
     ]
   );
   return rowToUser(res.rows[0]);
@@ -234,7 +327,6 @@ export async function createUser(user) {
 
 export async function updateUser(id, updateData) {
   const idStr = String(id);
-  // Build dynamic SET clause
   const fields = [];
   const values = [];
   let idx = 1;
@@ -250,6 +342,13 @@ export async function updateUser(id, updateData) {
     bio: 'bio',
     photos: 'photos',
     income: 'income',
+    city: 'city',
+    warningsCount: 'warnings_count',
+    isBanned: 'is_banned',
+    banReason: 'ban_reason',
+    lastSeenAt: 'last_seen_at',
+    trustScore: 'trust_score',
+    assets: 'assets',
     isVerified: 'is_verified',
     verificationPhoto: 'verification_photo',
     verificationSelfie: 'verification_selfie',
@@ -264,14 +363,13 @@ export async function updateUser(id, updateData) {
   for (const [jsKey, sqlCol] of Object.entries(mapping)) {
     if (updateData[jsKey] !== undefined) {
       fields.push(`${sqlCol} = $${idx}`);
-      values.push(updateData[jsKey]);
+      values.push(jsKey === 'assets' ? JSON.stringify(updateData[jsKey]) : updateData[jsKey]);
       idx++;
     }
   }
 
   // Recalculate BMI if height or weight changed
   if (updateData.height || updateData.weight) {
-    // We need to fetch current values to recalc
     const current = await getUser(idStr);
     if (current) {
       const h = updateData.height || current.height;
@@ -295,6 +393,11 @@ export async function updateUser(id, updateData) {
   return rowToUser(res.rows[0]);
 }
 
+export async function touchLastSeen(userId) {
+  const idStr = String(userId);
+  await pool.query(`UPDATE users SET last_seen_at = NOW() WHERE id = $1 OR telegram_id = $1`, [idStr]);
+}
+
 export async function deleteUser(userId) {
   const idStr = String(userId);
   await pool.query(`DELETE FROM likes WHERE from_id = $1 OR to_id = $1`, [idStr]);
@@ -303,161 +406,165 @@ export async function deleteUser(userId) {
   return true;
 }
 
-// ─── Like / Swipe Methods ────────────────────────────────────────
+// ─── Moderation & Warnings ────────────────────────────────────────
+
+export async function issueWarning(userId, reason) {
+  const user = await getUser(userId);
+  if (!user) return null;
+  const newWarnings = (user.warningsCount || 0) + 1;
+  const shouldBan = newWarnings >= 3;
+
+  return await updateUser(user.id, {
+    warningsCount: newWarnings,
+    isBanned: shouldBan,
+    banReason: shouldBan ? `Автоматический бан: 3 предупреждения (${reason})` : user.banReason
+  });
+}
+
+export async function banUser(userId, reason, clientIp = null) {
+  const user = await getUser(userId);
+  if (!user) return null;
+
+  if (clientIp) {
+    await pool.query(
+      `INSERT INTO banned_ips (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO UPDATE SET reason = EXCLUDED.reason`,
+      [clientIp, reason]
+    );
+  }
+
+  return await updateUser(user.id, {
+    isBanned: true,
+    banReason: reason || 'Заблокирован администратором'
+  });
+}
+
+export async function unbanUser(userId) {
+  return await updateUser(userId, {
+    isBanned: false,
+    banReason: '',
+    warningsCount: 0
+  });
+}
+
+export async function isIpBanned(ip) {
+  if (!ip) return false;
+  const res = await pool.query(`SELECT * FROM banned_ips WHERE ip = $1 LIMIT 1`, [ip]);
+  return res.rows.length > 0;
+}
+
+// ─── Likes & Matches Methods ──────────────────────────────────────
 
 export async function addLike(fromId, toId, type = 'like') {
   const fromStr = String(fromId);
   const toStr = String(toId);
+
   await pool.query(
-    `INSERT INTO likes (from_id, to_id, type, timestamp)
-     VALUES ($1, $2, $3, NOW())
+    `INSERT INTO likes (from_id, to_id, type)
+     VALUES ($1, $2, $3)
      ON CONFLICT (from_id, to_id) DO UPDATE SET type = EXCLUDED.type, timestamp = NOW()`,
     [fromStr, toStr, type]
   );
+
   if (type === 'like') {
-    const mutual = await pool.query(
-      `SELECT id FROM likes WHERE from_id = $1 AND to_id = $2 AND type = 'like'`,
+    const reciprocal = await pool.query(
+      `SELECT * FROM likes WHERE from_id = $1 AND to_id = $2 AND type = 'like'`,
       [toStr, fromStr]
     );
-    return mutual.rows.length > 0;
+    return reciprocal.rows.length > 0;
   }
   return false;
 }
 
-export async function blockUser(userId, targetUserId) {
-  const userStr = String(userId);
-  const targetStr = String(targetUserId);
-  const chatId = [userStr, targetStr].sort().join('_');
-  await pool.query(
-    `DELETE FROM likes WHERE (from_id=$1 AND to_id=$2) OR (from_id=$2 AND to_id=$1)`,
-    [userStr, targetStr]
-  );
-  await pool.query(`DELETE FROM messages WHERE chat_id = $1`, [chatId]);
-  await pool.query(
-    `INSERT INTO likes (from_id, to_id, type) VALUES ($1, $2, 'dislike')
-     ON CONFLICT (from_id, to_id) DO UPDATE SET type = 'dislike'`,
-    [userStr, targetStr]
-  );
-  return true;
-}
-
-export async function getSwipeFeed(userId) {
-  const userStr = String(userId);
-  const user = await getUser(userStr);
-  if (!user) return [];
-
-  const swipedRes = await pool.query(
-    `SELECT to_id FROM likes WHERE from_id = $1`,
-    [userStr]
-  );
-  const swipedIds = swipedRes.rows.map(r => r.to_id);
-  swipedIds.push(userStr); // exclude self
-
-  let query = `SELECT * FROM users WHERE is_verified = true AND id != ALL($1::text[])`;
-  const params = [swipedIds];
-  let idx = 2;
-
-  if (user.preferredGender !== 'all') {
-    query += ` AND gender = $${idx}`;
-    params.push(user.preferredGender);
-    idx++;
-  }
-
-  const res = await pool.query(query, params);
-  return res.rows
-    .filter(u => u.preferred_gender === 'all' || u.preferred_gender === user.gender)
-    .map(rowToUser);
-}
-
-export async function getMatches(userId) {
-  const userStr = String(userId);
-  const res = await pool.query(
-    `SELECT l1.to_id as match_id FROM likes l1
-     INNER JOIN likes l2 ON l1.from_id = l2.to_id AND l1.to_id = l2.from_id
-     WHERE l1.from_id = $1 AND l1.type = 'like' AND l2.type = 'like'`,
-    [userStr]
-  );
-
-  const matches = [];
-  for (const row of res.rows) {
-    const matchedUser = await getUser(row.match_id);
-    if (matchedUser) {
-      const chatId = [userStr, row.match_id].sort().join('_');
-      const msgRes = await pool.query(
-        `SELECT * FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 1`,
-        [chatId]
-      );
-      matches.push({
-        user: matchedUser,
-        chatId,
-        lastMessage: msgRes.rows[0] ? rowToMessage(msgRes.rows[0]) : null
-      });
-    }
-  }
-  return matches;
-}
-
 export async function getLikesReceived(userId) {
-  const userStr = String(userId);
+  const idStr = String(userId);
   const res = await pool.query(
-    `SELECT l.from_id, l.timestamp FROM likes l
-     WHERE l.to_id = $1 AND l.type = 'like'
+    `SELECT l.*, u.* FROM likes l
+     JOIN users u ON l.from_id = u.id
+     WHERE l.to_id = $1 
+       AND l.type = 'like'
        AND l.from_id NOT IN (
          SELECT to_id FROM likes WHERE from_id = $1
        )
      ORDER BY l.timestamp DESC`,
-    [userStr]
+    [idStr]
   );
 
-  const incomingLikes = [];
-  for (const row of res.rows) {
-    const likerUser = await getUser(row.from_id);
-    if (likerUser) {
-      const chatId = [userStr, String(row.from_id)].sort().join('_');
-      incomingLikes.push({
-        user: likerUser,
-        chatId,
-        timestamp: row.timestamp
-      });
-    }
-  }
-  return incomingLikes;
+  return res.rows.map(row => ({
+    user: rowToUser(row),
+    timestamp: row.timestamp
+  }));
 }
 
-export async function getSwipeHistory(userId) {
-  const userStr = String(userId);
+export async function getMatches(userId) {
+  const idStr = String(userId);
   const res = await pool.query(
-    `SELECT * FROM likes WHERE from_id = $1 ORDER BY timestamp DESC`,
-    [userStr]
+    `SELECT u.* FROM likes l1
+     JOIN likes l2 ON l1.from_id = l2.to_id AND l1.to_id = l2.from_id
+     JOIN users u ON l1.to_id = u.id
+     WHERE l1.from_id = $1 AND l1.type = 'like' AND l2.type = 'like'
+     ORDER BY l1.timestamp DESC`,
+    [idStr]
   );
-  const history = [];
+
+  const matches = [];
   for (const row of res.rows) {
-    const targetUser = await getUser(row.to_id);
-    if (targetUser) {
-      history.push({ targetUser, type: row.type, timestamp: row.timestamp });
-    }
-  }
-  return history;
-}
-
-export async function changeSwipeDecision(userId, targetUserId, newAction) {
-  const userStr = String(userId);
-  const targetStr = String(targetUserId);
-  await pool.query(
-    `UPDATE likes SET type = $1, timestamp = NOW() WHERE from_id = $2 AND to_id = $3`,
-    [newAction, userStr, targetStr]
-  );
-  if (newAction === 'like') {
-    const mutual = await pool.query(
-      `SELECT id FROM likes WHERE from_id = $1 AND to_id = $2 AND type = 'like'`,
-      [targetStr, userStr]
+    const partner = rowToUser(row);
+    const chatId = [idStr, partner.id].sort().join('_');
+    const msgRes = await pool.query(
+      `SELECT * FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 1`,
+      [chatId]
     );
-    return mutual.rows.length > 0;
+    matches.push({
+      chatId,
+      user: partner,
+      lastMessage: msgRes.rows[0] ? rowToMessage(msgRes.rows[0]) : null
+    });
   }
-  return false;
+  return matches;
 }
 
-// ─── Chat Methods ─────────────────────────────────────────────────
+export async function getSwipeCards(userId, filters = {}) {
+  const currentUser = await getUser(userId);
+  if (!currentUser) return [];
+
+  const idStr = String(userId);
+  const { minAge, maxAge, minHeight, maxHeight, minWeight, maxWeight, minIncome, city } = filters;
+
+  let query = `
+    SELECT * FROM users 
+    WHERE id != $1 
+      AND (is_banned = false OR is_banned IS NULL)
+      AND id NOT IN (
+        SELECT to_id FROM likes WHERE from_id = $1
+      )
+  `;
+  const params = [idStr];
+  let idx = 2;
+
+  if (currentUser.gender === 'female') {
+    query += ` AND gender = 'male'`;
+  } else {
+    query += ` AND gender = 'female'`;
+  }
+
+  if (minAge) { query += ` AND age >= $${idx}`; params.push(minAge); idx++; }
+  if (maxAge) { query += ` AND age <= $${idx}`; params.push(maxAge); idx++; }
+  if (minHeight) { query += ` AND height >= $${idx}`; params.push(minHeight); idx++; }
+  if (maxHeight) { query += ` AND height <= $${idx}`; params.push(maxHeight); idx++; }
+  if (minWeight) { query += ` AND weight >= $${idx}`; params.push(minWeight); idx++; }
+  if (maxWeight) { query += ` AND weight <= $${idx}`; params.push(maxWeight); idx++; }
+  if (minIncome) { query += ` AND income >= $${idx}`; params.push(minIncome); idx++; }
+  if (city && city !== 'all' && city !== 'Все города') {
+    query += ` AND city = $${idx}`; params.push(city); idx++;
+  }
+
+  query += ` ORDER BY is_verified DESC, created_at DESC LIMIT 50`;
+
+  const res = await pool.query(query, params);
+  return res.rows.map(rowToUser);
+}
+
+// ─── Messages Methods ──────────────────────────────────────────────
 
 export async function addMessage(chatId, senderId, text) {
   const res = await pool.query(
@@ -475,100 +582,293 @@ export async function getMessages(chatId) {
   return res.rows.map(rowToMessage);
 }
 
-// ─── Admin & Analytics ────────────────────────────────────────────
-
-export async function getAdminStats() {
-  const totalRes = await pool.query(`SELECT COUNT(*) FROM users`);
-  const verifiedRes = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = true`);
-  const pendingRes = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = false OR is_verified IS NULL`);
-  const likesRes = await pool.query(`SELECT COUNT(*) FROM likes`);
-  const msgRes = await pool.query(`SELECT COUNT(*) FROM messages`);
-  return {
-    totalUsers: parseInt(totalRes.rows[0].count),
-    verifiedUsers: parseInt(verifiedRes.rows[0].count),
-    pendingVerifications: parseInt(pendingRes.rows[0].count),
-    totalLikes: parseInt(likesRes.rows[0].count),
-    totalMessages: parseInt(msgRes.rows[0].count)
-  };
+export async function getUserChatLogs(userId) {
+  const idStr = String(userId);
+  const chatsRes = await pool.query(
+    `SELECT DISTINCT chat_id FROM messages WHERE chat_id LIKE '%' || $1 || '%'`,
+    [idStr]
+  );
+  const result = [];
+  for (const row of chatsRes.rows) {
+    const cId = row.chat_id;
+    const parts = cId.split('_');
+    const partnerId = parts.find(p => p !== idStr);
+    const partner = await getUser(partnerId);
+    const msgs = await getMessages(cId);
+    result.push({
+      chatId: cId,
+      partner,
+      messages: msgs
+    });
+  }
+  return result;
 }
 
-export async function getAllUsers() {
-  const res = await pool.query(`SELECT * FROM users ORDER BY created_at DESC`);
-  return res.rows.map(row => ({
-    user: rowToUser(row),
-    photo: row.verification_photo || (row.photos && row.photos[0]),
-    selfie: row.verification_selfie,
-    claimedWeight: row.weight,
-    registeredAt: row.created_at
-  }));
+// ─── Scheduled Dates Methods ─────────────────────────────────────
+
+export async function createScheduledDate(senderId, receiverId, chatId, locationName, yandexMapUrl, dateTime) {
+  const res = await pool.query(
+    `INSERT INTO scheduled_dates (chat_id, sender_id, receiver_id, location_name, yandex_map_url, date_time)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [chatId, String(senderId), String(receiverId), locationName, yandexMapUrl, dateTime]
+  );
+  return res.rows[0];
+}
+
+export async function updateScheduledDateStatus(dateId, status) {
+  const res = await pool.query(
+    `UPDATE scheduled_dates SET status = $1 WHERE id = $2 RETURNING *`,
+    [status, dateId]
+  );
+  return res.rows[0];
+}
+
+export async function getScheduledDates(chatId) {
+  const res = await pool.query(
+    `SELECT * FROM scheduled_dates WHERE chat_id = $1 ORDER BY created_at DESC`,
+    [chatId]
+  );
+  return res.rows;
+}
+
+// ─── User Reviews & Reports ────────────────────────────────────────
+
+export async function getUserReviews(targetUserId) {
+  const res = await pool.query(
+    `SELECT * FROM user_reviews WHERE target_user_id = $1 ORDER BY created_at DESC`,
+    [String(targetUserId)]
+  );
+  return res.rows;
+}
+
+export async function canUserReview(reviewerId, targetUserId) {
+  const rStr = String(reviewerId);
+  const tStr = String(targetUserId);
+  const chatId = [rStr, tStr].sort().join('_');
+  const res = await pool.query(
+    `SELECT COUNT(*) FROM messages WHERE chat_id = $1`,
+    [chatId]
+  );
+  return parseInt(res.rows[0].count) > 0;
+}
+
+export async function addUserReview(targetUserId, reviewerUser, rating, comment, photoUrl = null) {
+  const res = await pool.query(
+    `INSERT INTO user_reviews (target_user_id, reviewer_id, reviewer_name, reviewer_photo, rating, comment, photo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [
+      String(targetUserId),
+      String(reviewerUser.id),
+      reviewerUser.name,
+      reviewerUser.photos?.[0] || null,
+      parseInt(rating) || 5,
+      comment,
+      photoUrl
+    ]
+  );
+  return res.rows[0];
+}
+
+export async function reportUserReview(reviewId, reporterId, reason) {
+  const res = await pool.query(
+    `INSERT INTO review_reports (review_id, reporter_id, reason)
+     VALUES ($1, $2, $3) RETURNING *`,
+    [parseInt(reviewId), String(reporterId), reason]
+  );
+  return res.rows[0];
+}
+
+export async function getReviewReports() {
+  const res = await pool.query(
+    `SELECT rr.*, ur.target_user_id, ur.reviewer_id, ur.reviewer_name, ur.comment, ur.rating
+     FROM review_reports rr
+     JOIN user_reviews ur ON rr.review_id = ur.id
+     WHERE rr.status = 'pending'
+     ORDER BY rr.created_at DESC`
+  );
+  return res.rows;
+}
+
+export async function resolveReviewReport(reportId, action) {
+  if (action === 'delete') {
+    const reportRes = await pool.query(`SELECT review_id FROM review_reports WHERE id = $1`, [reportId]);
+    if (reportRes.rows[0]) {
+      await pool.query(`DELETE FROM user_reviews WHERE id = $1`, [reportRes.rows[0].review_id]);
+    }
+  }
+  await pool.query(`UPDATE review_reports SET status = $1 WHERE id = $2`, [action, reportId]);
+  return true;
+}
+
+// ─── Date Stories Community Forum ──────────────────────────────────
+
+export async function getDateStories(city = null) {
+  let query = `SELECT * FROM date_stories`;
+  const params = [];
+  if (city && city !== 'all' && city !== 'Все города') {
+    query += ` WHERE city = $1`;
+    params.push(city);
+  }
+  query += ` ORDER BY created_at DESC LIMIT 50`;
+  const res = await pool.query(query, params);
+  return res.rows;
+}
+
+export async function addDateStory(user, partnerName, story, rating, photoUrl = null) {
+  const res = await pool.query(
+    `INSERT INTO date_stories (user_id, user_name, user_photo, partner_name, story, rating, photo, city)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [
+      String(user.id),
+      user.name,
+      user.photos?.[0] || null,
+      partnerName,
+      story,
+      parseInt(rating) || 5,
+      photoUrl,
+      user.city || 'Москва'
+    ]
+  );
+  return res.rows[0];
+}
+
+export async function likeDateStory(storyId) {
+  const res = await pool.query(
+    `UPDATE date_stories SET likes_count = likes_count + 1 WHERE id = $1 RETURNING *`,
+    [storyId]
+  );
+  return res.rows[0];
+}
+
+// ─── Leaderboard ───────────────────────────────────────────────────
+
+export async function getLeaderboard(gender = 'male', city = null) {
+  let query = '';
+  const params = [];
+
+  if (gender === 'male') {
+    query = `
+      SELECT * FROM users 
+      WHERE gender = 'male' AND (is_banned = false OR is_banned IS NULL)
+    `;
+    if (city && city !== 'all' && city !== 'Все города') {
+      query += ` AND city = $1`;
+      params.push(city);
+    }
+    query += ` ORDER BY income DESC, is_verified DESC LIMIT 50`;
+  } else {
+    query = `
+      SELECT u.*, (SELECT COUNT(*) FROM likes WHERE to_id = u.id AND type = 'like') AS likes_received_count
+      FROM users u
+      WHERE u.gender = 'female' AND (u.is_banned = false OR u.is_banned IS NULL)
+    `;
+    if (city && city !== 'all' && city !== 'Все города') {
+      query += ` AND u.city = $1`;
+      params.push(city);
+    }
+    query += ` ORDER BY likes_received_count DESC, u.is_verified DESC LIMIT 50`;
+  }
+
+  const res = await pool.query(query, params);
+  return res.rows.map(row => {
+    const u = rowToUser(row);
+    u.likesCount = parseInt(row.likes_received_count || 0);
+    return u;
+  });
+}
+
+// ─── Admin Methods ─────────────────────────────────────────────────
+
+export async function getAdminStats() {
+  const total = await pool.query(`SELECT COUNT(*) FROM users`);
+  const verified = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = true`);
+  const pending = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = false OR is_verified IS NULL`);
+  const banned = await pool.query(`SELECT COUNT(*) FROM users WHERE is_banned = true`);
+
+  return {
+    totalUsers: parseInt(total.rows[0].count),
+    verifiedUsers: parseInt(verified.rows[0].count),
+    pendingUsers: parseInt(pending.rows[0].count),
+    bannedUsers: parseInt(banned.rows[0].count)
+  };
 }
 
 export async function getPendingVerifications() {
   const res = await pool.query(
     `SELECT * FROM users WHERE is_verified = false OR is_verified IS NULL ORDER BY created_at DESC`
   );
-  return res.rows.map(row => ({
-    user: rowToUser(row),
-    photo: row.verification_photo || (row.photos && row.photos[0]),
-    selfie: row.verification_selfie,
-    claimedWeight: row.weight,
-    requestedAt: row.verification_date || row.created_at
-  }));
+  return res.rows.map(rowToUser);
+}
+
+export async function getAllUsers() {
+  const res = await pool.query(`SELECT * FROM users ORDER BY created_at DESC`);
+  return res.rows.map(rowToUser);
 }
 
 export async function getVerifiedUsers() {
-  const res = await pool.query(
-    `SELECT * FROM users WHERE is_verified = true ORDER BY verification_date DESC`
-  );
-  return res.rows.map(row => ({
-    user: rowToUser(row),
-    photo: row.verification_photo,
-    selfie: row.verification_selfie,
-    claimedWeight: row.weight,
-    verifiedAt: row.verification_date || row.created_at
-  }));
+  const res = await pool.query(`SELECT * FROM users WHERE is_verified = true ORDER BY created_at DESC`);
+  return res.rows.map(rowToUser);
 }
 
 export async function approveVerification(userId, weightOverride = null) {
-  const user = await getUser(userId);
-  if (!user) return null;
-  const finalWeight = weightOverride ? parseFloat(weightOverride) : user.weight;
-  return await updateUser(user.id, {
+  const idStr = String(userId);
+  const current = await getUser(idStr);
+  if (!current) return null;
+
+  const updates = {
     isVerified: true,
     verificationStatus: 'approved',
-    weight: finalWeight,
     verificationDate: new Date().toISOString()
-  });
+  };
+
+  if (weightOverride) {
+    updates.weight = parseFloat(weightOverride);
+  }
+
+  return await updateUser(idStr, updates);
 }
 
-export async function rejectVerification(userId, reason = 'Качество изображения недостаточно') {
-  const user = await getUser(userId);
-  if (!user) return null;
-  return await updateUser(user.id, {
+export async function rejectVerification(userId, reason) {
+  const idStr = String(userId);
+  return await updateUser(idStr, {
     isVerified: false,
     verificationStatus: 'rejected',
-    verificationPhoto: null,
-    rejectionReason: reason
+    rejectionReason: reason || 'Фото верификации не прошло проверку.'
   });
 }
 
-export async function revokeVerification(userId, reason = 'Верификация отменена администратором') {
-  const user = await getUser(userId);
-  if (!user) return null;
-  return await updateUser(user.id, {
+export async function revokeVerification(userId, reason) {
+  const idStr = String(userId);
+  return await updateUser(idStr, {
     isVerified: false,
-    verificationStatus: 'rejected',
-    verificationPhoto: null,
-    rejectionReason: reason
+    verificationStatus: 'none',
+    rejectionReason: reason || 'Верификация была отозвана модератором.'
   });
 }
 
-// Legacy db object for backward compatibility
-export const db = {
-  getUser, getUsers, createUser, updateUser, deleteUser,
-  addLike, blockUser, getSwipeFeed, getMatches, getLikesReceived,
-  getSwipeHistory, changeSwipeDecision,
-  addMessage, getMessages,
-  getAdminStats, getAllUsers, getPendingVerifications,
-  getVerifiedUsers, approveVerification, rejectVerification, revokeVerification
-};
+export async function blockUser(userId, targetUserId) {
+  return await addLike(userId, targetUserId, 'dislike');
+}
+
+export async function getSwipeHistory(userId) {
+  const idStr = String(userId);
+  const res = await pool.query(
+    `SELECT l.*, u.* FROM likes l
+     JOIN users u ON l.to_id = u.id
+     WHERE l.from_id = $1
+     ORDER BY l.timestamp DESC`,
+    [idStr]
+  );
+  return res.rows.map(row => ({
+    id: row.id,
+    targetUser: rowToUser(row),
+    action: row.type,
+    timestamp: row.timestamp
+  }));
+}
+
+export async function changeSwipeDecision(userId, targetUserId, newAction) {
+  const fromStr = String(userId);
+  const toStr = String(targetUserId);
+  return await addLike(fromStr, toStr, newAction);
+}

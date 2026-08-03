@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, X, MessageSquare, Scale, Check, Sliders, RotateCcw, Send, Sparkles, ShieldAlert } from 'lucide-react';
+import { Heart, X, MessageSquare, Scale, Check, Sliders, RotateCcw, Send, Sparkles, ShieldCheck, MapPin, User, ChevronLeft, ChevronRight, Share2, DollarSign, Star, Car, Home } from 'lucide-react';
+
+const CITIES = ['Все города', 'Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Нижний Новгород', 'Сочи'];
 
 export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   const [feed, setFeed] = useState([]);
@@ -10,14 +12,24 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   // Filter modal state
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    minWeight: 40,
-    maxWeight: 110,
-    minHeight: 150,
-    maxHeight: 200
+    minAge: 18,
+    maxAge: 60,
+    minHeight: 140,
+    maxHeight: 210,
+    minWeight: 35,
+    maxWeight: 120,
+    minIncome: 0,
+    city: 'Все города'
   });
 
   // Match state
   const [matchData, setMatchData] = useState(null);
+
+  // Detailed User Profile Modal (Requirement #17)
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [modalUser, setModalUser] = useState(null);
+  const [modalPhotoIndex, setModalPhotoIndex] = useState(0);
+  const [modalReviews, setModalReviews] = useState([]);
 
   // Swipe drag gesture states
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -36,11 +48,8 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
   const getAuthHeaders = () => {
     const headers = {};
     const tgInit = window.Telegram?.WebApp?.initData;
-    if (tgInit) {
-      headers['x-tg-init-data'] = tgInit;
-    } else {
-      headers['x-dev-user-id'] = tgUserId;
-    }
+    if (tgInit) headers['x-tg-init-data'] = tgInit;
+    else headers['x-dev-user-id'] = tgUserId;
     return headers;
   };
 
@@ -48,17 +57,24 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${API_URL}/api/feed`, {
+      const queryParams = new URLSearchParams();
+      if (filters.minAge) queryParams.append('minAge', filters.minAge);
+      if (filters.maxAge) queryParams.append('maxAge', filters.maxAge);
+      if (filters.minHeight) queryParams.append('minHeight', filters.minHeight);
+      if (filters.maxHeight) queryParams.append('maxHeight', filters.maxHeight);
+      if (filters.minWeight) queryParams.append('minWeight', filters.minWeight);
+      if (filters.maxWeight) queryParams.append('maxWeight', filters.maxWeight);
+      if (filters.minIncome) queryParams.append('minIncome', filters.minIncome);
+      if (filters.city && filters.city !== 'Все города') queryParams.append('city', filters.city);
+
+      const response = await fetch(`${API_URL}/api/cards?${queryParams.toString()}`, {
         headers: getAuthHeaders()
       });
       
       const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Не удалось загрузить карточки');
 
-      if (!response.ok) {
-        throw new Error(result.message || result.error || 'Не удалось загрузить ленту');
-      }
-
-      setFeed(result.feed);
+      setFeed(result.cards || []);
       setCurrentIndex(0);
     } catch (err) {
       console.error(err);
@@ -70,87 +86,54 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
 
   const handleSwipe = async (action) => {
     if (currentIndex >= feed.length) return;
-
     const targetUser = feed[currentIndex];
     
-    // Optimistically advance card
     setCurrentIndex(prev => prev + 1);
     setDragOffset({ x: 0, y: 0 });
 
     try {
       const response = await fetch(`${API_URL}/api/like`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({
-          targetUserId: targetUser.id,
-          action // 'like' or 'dislike'
-        })
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ targetUserId: targetUser.id, action })
       });
-
-      if (!response.ok) {
-        throw new Error('Ошибка отправки лайка');
-      }
 
       const result = await response.json();
       if (result.isMatch) {
-        // Show Match screen!
-        setMatchData({
-          partner: targetUser
-        });
+        setMatchData({ partner: result.matchedUser || targetUser });
       }
-
     } catch (err) {
       console.error(err);
     }
   };
 
-  // Touch & Mouse Drag Handlers
-  const handleTouchStart = (e) => {
-    const touch = e.touches ? e.touches[0] : e;
-    setIsDragging(true);
-    setStartPos({ x: touch.clientX, y: touch.clientY });
-  };
-
-  const handleTouchMove = (e) => {
-    if (!isDragging) return;
-    const touch = e.touches ? e.touches[0] : e;
-    const deltaX = touch.clientX - startPos.x;
-    const deltaY = touch.clientY - startPos.y;
-    setDragOffset({ x: deltaX, y: deltaY });
-  };
-
-  const handleTouchEnd = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-
-    if (dragOffset.x > 80) {
-      handleSwipe('like');
-    } else if (dragOffset.x < -80) {
-      handleSwipe('dislike');
-    } else {
-      setDragOffset({ x: 0, y: 0 });
+  const handleOpenDetailedProfile = async (cardUser) => {
+    setModalUser(cardUser);
+    setModalPhotoIndex(0);
+    setShowProfileModal(true);
+    try {
+      const res = await fetch(`${API_URL}/api/reviews/${cardUser.id}`, { headers: getAuthHeaders() });
+      const data = await res.json();
+      if (res.ok) setModalReviews(data.reviews || []);
+    } catch (e) {
+      console.error(e);
     }
   };
 
   const handleSendDirectMessage = async (e) => {
     e.preventDefault();
+    const currentCard = feed[currentIndex];
     if (!directMsgText.trim() || !currentCard) return;
 
     setSendingMsg(true);
     try {
       const targetPartner = currentCard;
-
-      // 1. Like card first
       await fetch(`${API_URL}/api/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ targetUserId: targetPartner.id, action: 'like' })
       });
 
-      // 2. Send message directly
       const chatId = [String(user.id), String(targetPartner.id)].sort().join('_');
       await fetch(`${API_URL}/api/chats/${chatId}/message`, {
         method: 'POST',
@@ -161,8 +144,6 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
       setShowMessageModal(false);
       setDirectMsgText('');
       setCurrentIndex(prev => prev + 1);
-
-      // Navigate to chat directly
       onNavigateToChat(targetPartner.id);
     } catch (err) {
       console.error(err);
@@ -171,307 +152,227 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="screen-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
-        <div className="bg-mesh mesh-1"></div>
-        <div style={{ textAlign: 'center' }}>
-          <Sparkles className="spin" size={40} color="var(--color-primary)" style={{ animation: 'spin 2s linear infinite', marginBottom: '15px' }} />
-          <p style={{ color: 'var(--text-muted)' }}>Подбираем честные анкеты...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleShareApp = () => {
+    const text = encodeURIComponent('Присоединяйся к ScaleMate — честные знакомства с верификацией веса и дохода!');
+    const url = encodeURIComponent('https://t.me/scalemate_bot');
+    window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
+  };
 
-  if (error) {
-    return (
-      <div className="screen-container" style={{ justifyContent: 'center', alignItems: 'center', padding: '30px', textAlign: 'center' }}>
-        <div className="glass-premium" style={{ padding: '30px', borderRadius: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
-          <ShieldAlert size={48} color="#ff5f5f" />
-          <h3>Доступ Ограничен</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>
-            {error}
-          </p>
-          <button onClick={fetchFeed} className="btn btn-primary" style={{ padding: '10px 20px', fontSize: '14px' }}>
-            Обновить
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const getPhotoUrl = (p) => {
+    if (!p) return 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+    return p.startsWith('http') ? p : API_URL + p;
+  };
 
-  // Filter feed based on current filter state
-  const filteredFeed = feed.filter(profile => {
-    if (profile.weight < filters.minWeight || profile.weight > filters.maxWeight) return false;
-    if (profile.height < filters.minHeight || profile.height > filters.maxHeight) return false;
-    return true;
-  });
+  // Touch & Drag events
+  const handleTouchStart = (e) => {
+    setIsDragging(true);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setStartPos({ x: clientX, y: clientY });
+  };
 
-  const hasCards = currentIndex < filteredFeed.length;
-  const currentCard = hasCards ? filteredFeed[currentIndex] : null;
+  const handleTouchMove = (e) => {
+    if (!isDragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setDragOffset({ x: clientX - startPos.x, y: clientY - startPos.y });
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (dragOffset.x > 90) handleSwipe('like');
+    else if (dragOffset.x < -90) handleSwipe('dislike');
+    else setDragOffset({ x: 0, y: 0 });
+  };
+
+  const currentCard = feed[currentIndex];
+  const hasCards = currentIndex < feed.length;
 
   return (
-    <div className="screen-container" style={{ paddingBottom: '90px' }}>
+    <div className="screen-container">
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
 
-      {/* Filter Modal */}
+      {/* Advanced Filters Modal (Requirement #5) */}
       {showFilters && (
-        <div className="glass-premium" style={{ position: 'absolute', inset: 10, zIndex: 100, borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sliders color="var(--color-primary)" /> Настройки Поиска
-            </h3>
-            <button onClick={() => setShowFilters(false)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
-              Закрыть
-            </button>
-          </div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px' }}>Фильтры поиска</h3>
+              <button onClick={() => setShowFilters(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', flex: 1, overflowY: 'auto' }}>
-            {/* Weight Slider Group */}
-            <div className="glass-premium" style={{ padding: '16px', borderRadius: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span className="input-label">Диапазон веса (кг)</span>
-                <strong style={{ color: 'var(--color-primary)' }}>{filters.minWeight} — {filters.maxWeight} кг</strong>
-              </div>
-              <div style={{ display: 'flex', gap: '15px' }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Мин: {filters.minWeight} кг</span>
-                  <input 
-                    type="range" 
-                    min="35" 
-                    max="150" 
-                    value={filters.minWeight}
-                    onChange={(e) => setFilters(prev => ({ ...prev, minWeight: Number(e.target.value) }))}
-                    style={{ width: '100%', accentColor: 'var(--color-primary)' }}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Макс: {filters.maxWeight} кг</span>
-                  <input 
-                    type="range" 
-                    min="35" 
-                    max="150" 
-                    value={filters.maxWeight}
-                    onChange={(e) => setFilters(prev => ({ ...prev, maxWeight: Number(e.target.value) }))}
-                    style={{ width: '100%', accentColor: 'var(--color-primary)' }}
-                  />
-                </div>
+            <div className="input-group">
+              <span className="input-label">Город</span>
+              <select className="input-field" value={filters.city} onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} style={{ appearance: 'none', background: 'rgba(255,255,255,0.04)' }}>
+                {CITIES.map(c => <option key={c} value={c} style={{ background: 'var(--bg-secondary)' }}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="input-group">
+              <span className="input-label">Возраст: {filters.minAge} - {filters.maxAge} лет</span>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input type="range" min="18" max="70" value={filters.minAge} onChange={e => setFilters(prev => ({ ...prev, minAge: Number(e.target.value) }))} style={{ flex: 1 }} />
+                <input type="range" min="18" max="70" value={filters.maxAge} onChange={e => setFilters(prev => ({ ...prev, maxAge: Number(e.target.value) }))} style={{ flex: 1 }} />
               </div>
             </div>
 
-            {/* Height Slider Group */}
-            <div className="glass-premium" style={{ padding: '16px', borderRadius: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span className="input-label">Диапазон роста (см)</span>
-                <strong style={{ color: 'var(--color-secondary)' }}>{filters.minHeight} — {filters.maxHeight} см</strong>
-              </div>
-              <div style={{ display: 'flex', gap: '15px' }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Мин: {filters.minHeight} см</span>
-                  <input 
-                    type="range" 
-                    min="140" 
-                    max="220" 
-                    value={filters.minHeight}
-                    onChange={(e) => setFilters(prev => ({ ...prev, minHeight: Number(e.target.value) }))}
-                    style={{ width: '100%', accentColor: 'var(--color-secondary)' }}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Макс: {filters.maxHeight} см</span>
-                  <input 
-                    type="range" 
-                    min="140" 
-                    max="220" 
-                    value={filters.maxHeight}
-                    onChange={(e) => setFilters(prev => ({ ...prev, maxHeight: Number(e.target.value) }))}
-                    style={{ width: '100%', accentColor: 'var(--color-secondary)' }}
-                  />
-                </div>
+            <div className="input-group">
+              <span className="input-label">Рост: {filters.minHeight} - {filters.maxHeight} см</span>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input type="range" min="140" max="210" value={filters.minHeight} onChange={e => setFilters(prev => ({ ...prev, minHeight: Number(e.target.value) }))} style={{ flex: 1 }} />
+                <input type="range" min="140" max="210" value={filters.maxHeight} onChange={e => setFilters(prev => ({ ...prev, maxHeight: Number(e.target.value) }))} style={{ flex: 1 }} />
               </div>
             </div>
-          </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button 
-              onClick={() => {
-                setFilters({ minWeight: 40, maxWeight: 110, minHeight: 150, maxHeight: 200 });
-                setCurrentIndex(0);
-              }}
-              className="btn btn-secondary"
-              style={{ flex: 1, padding: '12px' }}
-            >
-              <RotateCcw size={16} /> Сбросить
-            </button>
-            <button 
-              onClick={() => {
-                setCurrentIndex(0);
-                setShowFilters(false);
-              }}
-              className="btn"
-              style={{ flex: 2, padding: '12px' }}
-            >
+            {user.gender === 'female' ? (
+              <div className="input-group">
+                <span className="input-label">Мин. Доход мужчины: {filters.minIncome ? parseInt(filters.minIncome).toLocaleString('ru-RU') : 0} ₽/мес</span>
+                <input type="range" min="0" max="1000000" step="50000" value={filters.minIncome} onChange={e => setFilters(prev => ({ ...prev, minIncome: Number(e.target.value) }))} style={{ width: '100%' }} />
+              </div>
+            ) : (
+              <div className="input-group">
+                <span className="input-label">Вес девушки: {filters.minWeight} - {filters.maxWeight} кг</span>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input type="range" min="35" max="120" value={filters.minWeight} onChange={e => setFilters(prev => ({ ...prev, minWeight: Number(e.target.value) }))} style={{ flex: 1 }} />
+                  <input type="range" min="35" max="120" value={filters.maxWeight} onChange={e => setFilters(prev => ({ ...prev, maxWeight: Number(e.target.value) }))} style={{ flex: 1 }} />
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => { fetchFeed(); setShowFilters(false); }} className="btn btn-accent" style={{ padding: '14px', borderRadius: '14px' }}>
               Применить фильтры
             </button>
           </div>
         </div>
       )}
 
-      {/* Match Overlay */}
-      {matchData && (
-        <div className="match-overlay">
-          <div className="bg-mesh mesh-1" style={{ opacity: 0.3, width: '400px', height: '400px' }}></div>
-          <h1 className="match-title">Взаимный интерес!</h1>
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '16px' }}>
-            Вы понравились друг другу с <strong>{matchData.partner.name}</strong>!
-          </p>
-          
-          <div className="match-photos">
-            <img 
-              src={user.photos?.[0] || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'} 
-              alt="Me" 
-              className="match-avatar" 
-            />
-            <div style={{ fontSize: '30px', animation: 'pulse 1.5s infinite' }}>❤️</div>
-            <img 
-              src={API_URL + matchData.partner.photos?.[0] || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'} 
-              alt={matchData.partner.name} 
-              className="match-avatar partner" 
-            />
-          </div>
+      {/* Detailed Profile Modal (Requirement #17) */}
+      {showProfileModal && modalUser && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px' }}>Профиль: {modalUser.name}</h3>
+              <button onClick={() => setShowProfileModal(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={22} /></button>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%', maxWidth: '280px' }}>
-            <button 
-              onClick={() => {
-                const partnerId = matchData.partner.id;
-                setMatchData(null);
-                onNavigateToChat(partnerId);
-              }} 
-              className="btn"
-            >
-              Написать сообщение
-            </button>
-            <button 
-              onClick={() => setMatchData(null)} 
-              className="btn btn-secondary"
-            >
-              Продолжить поиск
-            </button>
-          </div>
-        </div>
-      )}
+            {/* Photo Gallery Carousel Slider */}
+            <div style={{ position: 'relative', width: '100%', height: '320px', borderRadius: '20px', overflow: 'hidden' }}>
+              <img src={getPhotoUrl(modalUser.photos?.[modalPhotoIndex])} alt={modalUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {modalUser.photos?.length > 1 && (
+                <>
+                  <button onClick={() => setModalPhotoIndex(prev => (prev > 0 ? prev - 1 : modalUser.photos.length - 1))} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer' }}>
+                    <ChevronLeft size={22} />
+                  </button>
+                  <button onClick={() => setModalPhotoIndex(prev => (prev < modalUser.photos.length - 1 ? prev + 1 : 0))} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer' }}>
+                    <ChevronRight size={22} />
+                  </button>
+                </>
+              )}
+            </div>
 
-      {/* Direct Message Modal */}
-      {showMessageModal && currentCard && (
-        <div 
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-        >
-          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <img 
-                src={API_URL + currentCard.photos[0]} 
-                alt={currentCard.name}
-                style={{ width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover' }}
-              />
-              <div>
-                <h3 style={{ fontSize: '18px' }}>Написать {currentCard.name}</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Прямое первое сообщение</span>
+            {/* Trust Meter Score */}
+            <div className="glass" style={{ padding: '14px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Уровень доверия (Trust Score)</span>
+                <strong style={{ color: 'var(--color-accent)' }}>{modalUser.trustScore || 85}%</strong>
+              </div>
+              <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ width: `${modalUser.trustScore || 85}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent))' }} />
               </div>
             </div>
 
-            <form onSubmit={handleSendDirectMessage} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <textarea
-                placeholder={`Напишите приветственное сообщение для ${currentCard.name}...`}
-                value={directMsgText}
-                onChange={(e) => setDirectMsgText(e.target.value)}
-                rows={4}
-                style={{
-                  width: '100%',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '16px',
-                  padding: '12px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  outline: 'none',
-                  resize: 'none',
-                  fontFamily: 'inherit'
-                }}
-                autoFocus
-              />
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setShowMessageModal(false)}
-                  className="btn btn-secondary" 
-                  style={{ flex: 1, padding: '12px', fontSize: '13px' }}
-                >
-                  Отмена
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={sendingMsg || !directMsgText.trim()}
-                  className="btn" 
-                  style={{ flex: 2, padding: '12px', fontSize: '13px', background: 'linear-gradient(135deg, #a855f7, var(--color-primary))' }}
-                >
-                  <Send size={15} /> Отправить
-                </button>
+            {/* Main Parameters */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="glass" style={{ padding: '10px', borderRadius: '14px', fontSize: '13px' }}>
+                📍 <strong>Город:</strong> {modalUser.city || 'Москва'}
               </div>
-            </form>
+              <div className="glass" style={{ padding: '10px', borderRadius: '14px', fontSize: '13px' }}>
+                📏 <strong>Рост:</strong> {modalUser.height} см
+              </div>
+              {modalUser.gender === 'female' ? (
+                <div className="glass" style={{ padding: '10px', borderRadius: '14px', fontSize: '13px' }}>
+                  ⚖️ <strong>Вес:</strong> {modalUser.weight} кг
+                </div>
+              ) : (
+                <div className="glass" style={{ padding: '10px', borderRadius: '14px', fontSize: '13px' }}>
+                  💰 <strong>Доход:</strong> {parseInt(modalUser.income || 0).toLocaleString('ru-RU')} ₽
+                </div>
+              )}
+              <div className="glass" style={{ padding: '10px', borderRadius: '14px', fontSize: '13px' }}>
+                🛡️ <strong>Статус:</strong> {modalUser.isVerified ? 'Верифицирован ✅' : 'Обычный'}
+              </div>
+            </div>
+
+            {/* Bio */}
+            <div>
+              <h4 style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>О себе</h4>
+              <p style={{ fontSize: '14px', lineHeight: '1.4' }}>{modalUser.bio || 'Пользователь пока не добавил описание.'}</p>
+            </div>
+
+            {/* Assets Showcase */}
+            {modalUser.assets && modalUser.assets.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: '14px', color: 'var(--color-accent)', marginBottom: '8px' }}>🏎️ Недвижимость и Автомобили</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {modalUser.assets.map((item, idx) => (
+                    <div key={idx} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {item.type === 'car' ? <Car color="#00f5d4" size={20} /> : <Home color="#a855f7" size={20} />}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.title}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reviews Section */}
+            <div>
+              <h4 style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '8px' }}>Отзывы встречавшихся ({modalReviews.length})</h4>
+              {modalReviews.length === 0 ? (
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Пока нет отзывов.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {modalReviews.map(r => (
+                    <div key={r.id} className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <strong>{r.reviewer_name}</strong>
+                        <span style={{ color: '#ffd700' }}>{'★'.repeat(r.rating)}</span>
+                      </div>
+                      <p>{r.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       )}
 
-      {/* Main Deck Container */}
+      {/* Main Deck Stack View */}
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', zIndex: 1 }}>
         
         {/* Header Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 5px 10px 5px' }}>
-          <span style={{ fontSize: '18px', fontWeight: '800', background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <span style={{ fontSize: '20px', fontWeight: '800', background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             ScaleMate
           </span>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button 
-              onClick={() => setShowFilters(true)}
-              style={{
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                color: '#fff',
-                padding: '5px 10px',
-                borderRadius: '20px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                fontSize: '11px',
-                fontWeight: '600'
-              }}
-            >
-              <Sliders size={12} color="var(--color-primary)" /> Фильтры
-            </button>
-
-            <span className="badge-verified" style={{ fontSize: '10px' }}>
-              <Scale size={10} /> Вес проверен
-            </span>
-          </div>
+          <button 
+            onClick={() => setShowFilters(true)}
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', padding: '6px 12px', borderRadius: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
+          >
+            <Sliders size={14} color="var(--color-primary)" /> Фильтры
+          </button>
         </div>
 
         {hasCards ? (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
-            {/* Swipeable Card Stack Container */}
             <div className="swipe-card-container">
               <div 
                 className="swipe-card glass"
@@ -486,38 +387,28 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
                   transition: isDragging ? 'none' : 'transform 0.3s ease-out'
                 }}
               >
-                {/* Swipe Badges Overlay */}
-                {dragOffset.x > 30 && (
-                  <div className="swipe-badge like">ЛАЙК</div>
-                )}
-                {dragOffset.x < -30 && (
-                  <div className="swipe-badge dislike">ПРОПУСК</div>
-                )}
+                {dragOffset.x > 30 && <div className="swipe-badge like">ЛАЙК</div>}
+                {dragOffset.x < -30 && <div className="swipe-badge dislike">ПРОПУСК</div>}
 
-                <img 
-                  src={API_URL + currentCard.photos[0]} 
-                  alt={currentCard.name} 
-                  className="card-image" 
-                />
-                <div className="card-gradient"></div>
+                <img src={getPhotoUrl(currentCard.photos[0])} alt={currentCard.name} className="card-image" />
+                <div className="card-gradient" />
                 <div className="card-info">
                   
-                  {/* Verified Weight/Income Badge */}
                   <div className="badge-verified">
                     <Check size={12} strokeWidth={3} />
                     {currentCard.gender === 'male' 
-                      ? `Доход ${parseInt(currentCard.income || 150000).toLocaleString('ru-RU')} ₽/мес подтвержден` 
-                      : `${currentCard.weight} кг подтверждено (ИМТ ${currentCard.bmi})`}
+                      ? `Доход ${parseInt(currentCard.income || 150000).toLocaleString('ru-RU')} ₽/мес` 
+                      : `${currentCard.weight} кг (ИМТ ${currentCard.bmi})`}
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
                     <h2 style={{ fontSize: '24px' }}>{currentCard.name}, {currentCard.age}</h2>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: 'var(--text-muted)' }}>
-                    <span>Рост: {currentCard.height} см</span>
+                  <div style={{ display: 'flex', gap: '10px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                    <span>📍 {currentCard.city || 'Москва'}</span>
                     <span>•</span>
-                    <span>Вес: {currentCard.weight} кг</span>
+                    <span>Рост: {currentCard.height} см</span>
                   </div>
 
                   <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4', marginTop: '3px' }}>
@@ -527,17 +418,17 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
               </div>
             </div>
 
-            {/* Swipes Controller Buttons (Dislike - Direct Message - Like) */}
-            <div className="swipe-buttons">
+            {/* Action Buttons: Dislike - Profile Modal - Direct Message - Like */}
+            <div className="swipe-buttons" style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '12px' }}>
               <button onClick={() => handleSwipe('dislike')} className="swipe-btn dislike" title="Пропустить">
                 <X size={26} />
               </button>
 
-              <button 
-                onClick={() => setShowMessageModal(true)} 
-                className="swipe-btn message" 
-                title="Написать первое сообщение"
-              >
+              <button onClick={() => handleOpenDetailedProfile(currentCard)} className="swipe-btn" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)' }} title="Подробный профиль">
+                <User size={22} />
+              </button>
+
+              <button onClick={() => setShowMessageModal(true)} className="swipe-btn message" title="Написать первое сообщение">
                 <MessageSquare size={22} />
               </button>
 
@@ -547,27 +438,28 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
             </div>
           </div>
         ) : (
+          /* Empty Deck State with Working Share Link (Requirement #21) */
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '20px' }}>
             <div style={{ display: 'inline-flex', padding: '16px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.03)', marginBottom: '15px' }}>
-              <Sparkles size={32} color="var(--text-muted)" />
+              <Sparkles size={36} color="var(--color-primary)" />
             </div>
-            <h3>Анкеты закончились</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '8px', maxWidth: '250px' }}>
-              Попробуйте обновить ленту или изменить настройки поиска позже.
+            <h3>Анкеты пока закончились</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '8px', maxWidth: '260px' }}>
+              Вы просмотрели все доступные анкеты в этом городе. Обновите ленту или пригласите друзей!
             </p>
-            <button onClick={fetchFeed} className="btn btn-secondary" style={{ marginTop: '20px', padding: '10px 18px', fontSize: '13px' }}>
-              Обновить ленту
-            </button>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px', width: '100%', maxWidth: '260px' }}>
+              <button onClick={fetchFeed} className="btn btn-secondary" style={{ padding: '12px', fontSize: '13px' }}>
+                <RotateCcw size={15} /> Обновить ленту
+              </button>
+
+              <button onClick={handleShareApp} className="btn btn-accent" style={{ padding: '12px', fontSize: '13px', gap: '6px' }}>
+                <Share2 size={15} /> Поделиться с друзьями
+              </button>
+            </div>
           </div>
         )}
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.2); }
-        }
-      `}</style>
     </div>
   );
 }

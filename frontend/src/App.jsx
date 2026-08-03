@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, MessageCircle, User, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
+import { Flame, MessageCircle, User, ShieldCheck, AlertCircle, RefreshCw, Trophy, MessageSquare, Ban } from 'lucide-react';
 import Register from './components/Register';
 import Verification from './components/Verification';
 import Deck from './components/Deck';
@@ -8,20 +8,20 @@ import Profile from './components/Profile';
 import AdminPanel from './components/AdminPanel';
 import SwipeHistory from './components/SwipeHistory';
 import FaceCheckModal from './components/FaceCheckModal';
-
+import Leaderboard from './components/Leaderboard';
+import DateStories from './components/DateStories';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-
 export default function App() {
   const [user, setUser] = useState(null);
+  const [bannedInfo, setBannedInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentTab, setCurrentTab] = useState('feed'); // 'feed' | 'chats' | 'profile' | 'admin' | 'history'
+  const [currentTab, setCurrentTab] = useState('feed'); // 'feed' | 'leaderboard' | 'stories' | 'chats' | 'profile' | 'admin' | 'history'
   const [activePartnerId, setActivePartnerId] = useState(null);
   const [showFaceCheck, setShowFaceCheck] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
-  
   // Custom dev testing states (for testing in standard browser)
   const [devUserId, setDevUserId] = useState(() => {
     let stored = localStorage.getItem('scalemate_dev_user_id');
@@ -34,20 +34,13 @@ export default function App() {
   const [tgInitData, setTgInitData] = useState('');
   const [isTelegram, setIsTelegram] = useState(false);
 
-
-
   useEffect(() => {
-    // Check if running in Telegram WebApp
     const tg = window.Telegram?.WebApp;
     if (tg && tg.initData) {
       setIsTelegram(true);
       setTgInitData(tg.initData);
-      
-      // Expand to full height and notify ready
       tg.expand();
       tg.ready();
-      
-      // Set theme header color
       tg.setHeaderColor('#0a0813');
     }
     
@@ -56,6 +49,7 @@ export default function App() {
 
   const fetchProfile = async () => {
     setLoading(true);
+    setBannedInfo(null);
     try {
       const headers = {};
       const tgInit = window.Telegram?.WebApp?.initData;
@@ -68,7 +62,10 @@ export default function App() {
       const response = await fetch(`${API_URL}/api/profile`, { headers });
       const result = await response.json();
       
-      if (response.ok && result.user) {
+      if (response.status === 403 && result.banned) {
+        setBannedInfo(result);
+        setUser(null);
+      } else if (response.ok && result.user) {
         setUser(result.user);
       } else {
         setUser(null);
@@ -92,20 +89,11 @@ export default function App() {
 
   const handleResetProfile = async () => {
     if (window.confirm('Вы действительно хотите сбросить профиль для теста?')) {
-      // Clear local states
       setUser(null);
-      
-      // We can just clear database user locally or simulate it by changing devUserId
       const nextId = String(parseInt(devUserId) + 1);
       localStorage.setItem('scalemate_dev_user_id', nextId);
       setDevUserId(nextId);
     }
-  };
-
-  const handleSwitchDevUser = (id) => {
-    localStorage.setItem('scalemate_dev_user_id', id);
-    setDevUserId(id);
-    setCurrentTab('feed');
   };
 
   if (loading) {
@@ -113,9 +101,28 @@ export default function App() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0813', color: '#fff' }}>
         <RefreshCw className="spin" size={32} style={{ animation: 'spin 1.5s linear infinite', color: 'var(--color-primary)' }} />
         <span style={{ marginTop: '15px', color: 'var(--text-muted)', fontSize: '14px' }}>Запуск ScaleMate...</span>
-        <style>{`
-          @keyframes spin { 100% { transform: rotate(360deg); } }
-        `}</style>
+        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // Banned Screen Overlay (Requirement #3)
+  if (bannedInfo) {
+    return (
+      <div className="screen-container" style={{ justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '20px' }}>
+        <div className="bg-mesh mesh-1"></div>
+        <div className="glass-premium" style={{ padding: '40px 24px', borderRadius: '28px', maxWidth: '360px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'rgba(255, 95, 95, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #ff5f5f' }}>
+            <Ban size={36} color="#ff5f5f" />
+          </div>
+          <h2 style={{ fontSize: '24px', color: '#ff5f5f' }}>Аккаунт заблокирован</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>
+            {bannedInfo.banReason || 'Ваш профиль был заблокирован администрацией за нарушение правил безопасности.'}
+          </p>
+          <div style={{ fontSize: '12px', color: '#ffd700', background: 'rgba(255, 215, 0, 0.1)', padding: '6px 12px', borderRadius: '12px' }}>
+            Предупреждений: {bannedInfo.warningsCount || 3}/3
+          </div>
+        </div>
       </div>
     );
   }
@@ -124,7 +131,6 @@ export default function App() {
   let screenContent;
 
   if (!user) {
-    // 1. Not registered
     screenContent = (
       <Register 
         onRegister={handleRegisterSuccess} 
@@ -133,7 +139,6 @@ export default function App() {
       />
     );
   } else if (!user.isVerified && user.verificationStatus !== 'pending_moderation') {
-    // 2. Registered but weight not verified and not pending moderation
     screenContent = (
       <Verification 
         user={user} 
@@ -143,7 +148,6 @@ export default function App() {
       />
     );
   } else {
-    // 3. Fully registered and verified
     switch (currentTab) {
       case 'feed':
         screenContent = (
@@ -155,6 +159,24 @@ export default function App() {
               setActivePartnerId(partnerId);
               setCurrentTab('chats');
             }}
+          />
+        );
+        break;
+      case 'leaderboard':
+        screenContent = (
+          <Leaderboard 
+            user={user}
+            API_URL={API_URL}
+            tgUserId={devUserId}
+          />
+        );
+        break;
+      case 'stories':
+        screenContent = (
+          <DateStories 
+            user={user}
+            API_URL={API_URL}
+            tgUserId={devUserId}
           />
         );
         break;
@@ -212,8 +234,6 @@ export default function App() {
 
   return (
     <>
-
-      {/* Screen view rendering */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {screenContent}
       </div>
@@ -225,25 +245,42 @@ export default function App() {
             className={`nav-item ${currentTab === 'feed' ? 'active' : ''}`}
             onClick={() => { setIsChatOpen(false); setCurrentTab('feed'); }}
           >
-            <Flame size={22} />
+            <Flame size={20} />
             <span>Знакомства</span>
           </div>
+
+          <div 
+            className={`nav-item ${currentTab === 'leaderboard' ? 'active' : ''}`}
+            onClick={() => { setIsChatOpen(false); setCurrentTab('leaderboard'); }}
+          >
+            <Trophy size={20} />
+            <span>Топ</span>
+          </div>
+
+          <div 
+            className={`nav-item ${currentTab === 'stories' ? 'active' : ''}`}
+            onClick={() => { setIsChatOpen(false); setCurrentTab('stories'); }}
+          >
+            <MessageSquare size={20} />
+            <span>Форум</span>
+          </div>
+
           <div 
             className={`nav-item ${currentTab === 'chats' ? 'active' : ''}`}
             onClick={() => { setIsChatOpen(false); setCurrentTab('chats'); }}
           >
-            <MessageCircle size={22} />
+            <MessageCircle size={20} />
             <span>Чаты</span>
           </div>
+
           <div 
             className={`nav-item ${currentTab === 'profile' ? 'active' : ''}`}
             onClick={() => { setIsChatOpen(false); setCurrentTab('profile'); }}
           >
-            <User size={22} />
+            <User size={20} />
             <span>Профиль</span>
           </div>
 
-          {/* Show Moderation tab ONLY for Admin account */}
           {(
             user?.isAdmin === true ||
             user?.name?.toLowerCase() === 'admin' ||
@@ -256,7 +293,7 @@ export default function App() {
               onClick={() => { setIsChatOpen(false); setCurrentTab('admin'); }}
               style={{ color: 'var(--color-accent)' }}
             >
-              <ShieldCheck size={22} />
+              <ShieldCheck size={20} />
               <span>Модерация</span>
             </div>
           )}

@@ -1,427 +1,426 @@
-import React, { useState, useRef } from 'react';
-import { Scale, Ruler, CheckCircle2, ShieldAlert, AlertCircle, LogOut, Edit3, Camera, Save, X, Upload } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle } from 'lucide-react';
+import { getRussianErrorMessage } from '../utils/errorHandler';
+
+const CITIES_PRESETS = ['Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Нижний Новгород', 'Сочи', 'Краснодар', 'Уфа', 'Самара'];
 
 export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, onUpdateUser, API_URL, tgUserId }) {
+  const [activeTab, setActiveTab] = useState('info'); // 'info' | 'assets' | 'reviews'
   const [isEditing, setIsEditing] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  
+  // Edit Form State
   const [formData, setFormData] = useState({
     name: user.name || '',
     age: user.age || '',
     height: user.height || '',
-    bio: user.bio || '',
-    preferredGender: user.preferredGender || 'male'
+    weight: user.weight || '',
+    income: user.income || 0,
+    city: user.city || 'Москва',
+    bio: user.bio || ''
   });
-  const [photoFiles, setPhotoFiles] = useState([]);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [saving, setSaving] = useState(false);
+
+  // Assets Form State
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [assetType, setAssetType] = useState('car'); // 'car' | 'estate'
+  const [assetTitle, setAssetTitle] = useState('');
+  const [assetPrice, setAssetPrice] = useState('');
+  const [assetPhoto, setAssetPhoto] = useState(null);
+
+  // Review Report Modal
+  const [reportReviewId, setReportReviewId] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const fileInputRef = useRef(null);
 
-  // Determine BMI Category and Color
-  const getBmiDetails = (bmi) => {
-    if (!bmi) return { label: 'Нет данных', color: '#9f9cb0' };
-    if (bmi < 18.5) return { label: 'Дефицит массы тела', color: '#00f5d4' };
-    if (bmi >= 18.5 && bmi < 25) return { label: 'Нормальный вес', color: '#00f5d4' };
-    if (bmi >= 25 && bmi < 30) return { label: 'Избыточный вес', color: '#ffb703' };
-    return { label: 'Ожирение', color: '#ff5f5f' };
-  };
-
-  const bmiDetails = getBmiDetails(user.bmi);
+  useEffect(() => {
+    fetchReviews();
+  }, [user.id]);
 
   const getAuthHeaders = () => {
     const headers = {};
     const tgInit = window.Telegram?.WebApp?.initData;
-    if (tgInit) {
-      headers['x-tg-init-data'] = tgInit;
-    } else if (tgUserId) {
-      headers['x-dev-user-id'] = tgUserId;
-    }
+    if (tgInit) headers['x-tg-init-data'] = tgInit;
+    else headers['x-dev-user-id'] = tgUserId;
     return headers;
   };
 
-  const handlePhotoSelect = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      setPhotoFiles(files);
-      const url = URL.createObjectURL(files[0]);
-      setPreviewUrl(url);
-    }
-  };
-
-  const handleOpenEdit = () => {
-    setFormData({
-      name: user.name || '',
-      age: user.age || '',
-      height: user.height || '',
-      bio: user.bio || '',
-      preferredGender: user.preferredGender || 'male'
-    });
-    setPhotoFiles([]);
-    setPreviewUrl('');
-    setError('');
-    setIsEditing(true);
+  const fetchReviews = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/reviews/${user.id}`, { headers: getAuthHeaders() });
+      const result = await response.json();
+      if (response.ok) setReviews(result.reviews || []);
+    } catch (e) { console.error(e); }
   };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
-    setSaving(true);
+    setLoading(true);
     setError('');
 
     try {
-      const data = new FormData();
-      data.append('name', formData.name);
-      data.append('age', formData.age);
-      data.append('height', formData.height);
-      data.append('bio', formData.bio);
-      data.append('preferredGender', formData.preferredGender);
-
-      if (photoFiles.length > 0) {
-        photoFiles.forEach(file => data.append('photos', file));
-      }
-
       const response = await fetch(`${API_URL}/api/profile/edit`, {
         method: 'POST',
-        headers: getAuthHeaders(),
-        body: data
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          name: formData.name,
+          age: parseInt(formData.age),
+          height: parseInt(formData.height),
+          weight: parseFloat(formData.weight),
+          income: parseInt(formData.income),
+          city: formData.city,
+          bio: formData.bio
+        })
       });
 
       const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Не удалось сохранить профиль');
-      }
+      if (!response.ok) throw new Error(result.error || 'Ошибка сохранения');
 
-      if (onUpdateUser && result.user) {
-        onUpdateUser(result.user);
-      }
+      onUpdateUser(result.user);
       setIsEditing(false);
     } catch (err) {
-      console.error(err);
-      setError(err.message);
+      setError(getRussianErrorMessage(err));
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
-  const currentAvatarSrc = previewUrl 
-    ? previewUrl 
-    : (user.photos?.[0] ? (user.photos[0].startsWith('http') ? user.photos[0] : (API_URL + user.photos[0])) : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150');
+  const handleAddAsset = async (e) => {
+    e.preventDefault();
+    if (!assetTitle || !assetPrice) return;
+
+    const newAsset = {
+      id: Date.now(),
+      type: assetType,
+      title: assetTitle,
+      price: parseInt(assetPrice)
+    };
+
+    const updatedAssets = [...(user.assets || []), newAsset];
+    try {
+      const response = await fetch(`${API_URL}/api/assets/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ assets: updatedAssets })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        onUpdateUser(result.user);
+        setShowAssetModal(false);
+        setAssetTitle('');
+        setAssetPrice('');
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleReportReview = async (e) => {
+    e.preventDefault();
+    if (!reportReviewId || !reportReason) return;
+
+    try {
+      await fetch(`${API_URL}/api/reviews/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ reviewId: reportReviewId, reason: reportReason })
+      });
+      alert('Жалоба отправлена модераторам на рассмотрение!');
+      setReportReviewId(null);
+      setReportReason('');
+    } catch (e) { console.error(e); }
+  };
+
+  const getPhotoUrl = (p) => {
+    if (!p) return 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
+    return p.startsWith('http') ? p : API_URL + p;
+  };
 
   return (
-    <div className="screen-container" style={{ paddingBottom: '90px', overflowX: 'hidden' }}>
+    <div className="screen-container">
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
 
-      {/* Edit Profile Modal */}
-      {isEditing && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box', overflow: 'hidden', touchAction: 'none' }}>
-          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '88vh', overflowY: 'auto', overflowX: 'hidden', boxSizing: 'border-box' }}>
+      <div style={{ zIndex: 1, position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        
+        {/* Header Profile Section */}
+        <div className="glass-premium" style={{ padding: '24px', borderRadius: '24px', textAlign: 'center', position: 'relative' }}>
+          
+          <div style={{ position: 'relative', width: '100px', height: '100px', margin: 'auto', marginBottom: '14px' }}>
+            <img 
+              src={getPhotoUrl(user.photos?.[0])} 
+              alt={user.name} 
+              style={{ width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-primary)' }}
+            />
+            {user.isVerified && (
+              <div style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'var(--color-accent)', borderRadius: '50%', padding: '4px', display: 'flex', border: '2px solid #0a0813' }}>
+                <CheckCircle2 size={16} color="#000" />
+              </div>
+            )}
+          </div>
+
+          <h2 style={{ fontSize: '22px', marginBottom: '4px' }}>{user.name}, {user.age}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '12px' }}>📍 {user.city || 'Москва'}</p>
+
+          {/* Trust Score 0-100% Bar (Requirement #7) */}
+          <div style={{ background: 'rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '16px', maxWidth: '280px', margin: 'auto', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Рейтинг Доверия:</span>
+              <strong style={{ color: 'var(--color-accent)' }}>{user.trustScore || 85}%</strong>
+            </div>
+            <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${user.trustScore || 85}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent))' }} />
+            </div>
+          </div>
+
+          {/* Sub-Tabs: Info - Assets - Reviews */}
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '16px', gap: '4px' }}>
+            <button onClick={() => setActiveTab('info')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'info' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              Инфо
+            </button>
+            <button onClick={() => setActiveTab('assets')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'assets' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              Имущество
+            </button>
+            <button onClick={() => setActiveTab('reviews')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'reviews' ? 'var(--color-accent)' : 'transparent', color: activeTab === 'reviews' ? '#000' : '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              Отзывы ({reviews.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Tab 1: Profile Info & Parameters */}
+        {activeTab === 'info' && (
+          <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Edit3 color="var(--color-primary)" size={18} /> Редактировать Профиль
-              </h3>
-              <button type="button" onClick={() => setIsEditing(false)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
-                <X size={16} />
+              <h3 style={{ fontSize: '16px' }}>Профильные данные</h3>
+              <button onClick={() => setIsEditing(!isEditing)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '16px', gap: '4px' }}>
+                <Edit3 size={14} /> {isEditing ? 'Отмена' : 'Редактировать'}
               </button>
             </div>
 
-            {error && (
-              <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
-                ⚠️ {error}
-              </div>
-            )}
+            {isEditing ? (
+              <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {error && <div style={{ color: '#ff5f5f', fontSize: '12px' }}>⚠️ {error}</div>}
 
-            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
-              
-              {/* Avatar Selector Preview */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ position: 'relative', cursor: 'pointer', width: '90px', height: '90px' }}
-                >
-                  <img 
-                    src={currentAvatarSrc} 
-                    alt="Avatar Preview" 
-                    style={{ 
-                      width: '90px', 
-                      height: '90px', 
-                      borderRadius: '50%', 
-                      objectFit: 'cover', 
-                      border: '3px solid var(--color-primary)',
-                      boxShadow: 'var(--shadow-neon)' 
-                    }}
-                  />
-                  <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0,
-                    background: 'var(--color-primary)',
-                    color: '#fff',
-                    borderRadius: '50%',
-                    padding: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
-                  }}>
-                    <Camera size={14} />
+                <div className="input-group">
+                  <span className="input-label">Имя (только имя)</span>
+                  <input type="text" className="input-field" value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} required />
+                </div>
+
+                <div className="input-group">
+                  <span className="input-label">Город</span>
+                  <select className="input-field" value={formData.city} onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))} style={{ appearance: 'none', background: 'rgba(255,255,255,0.04)' }}>
+                    {CITIES_PRESETS.map(c => <option key={c} value={c} style={{ background: 'var(--bg-secondary)' }}>{c}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="input-group">
+                    <span className="input-label">Возраст</span>
+                    <input type="number" className="input-field" value={formData.age} onChange={e => setFormData(prev => ({ ...prev, age: e.target.value }))} required />
+                  </div>
+                  <div className="input-group">
+                    <span className="input-label">Рост (см)</span>
+                    <input type="number" className="input-field" value={formData.height} onChange={e => setFormData(prev => ({ ...prev, height: e.target.value }))} required />
                   </div>
                 </div>
 
-                <input 
-                  ref={fileInputRef}
-                  type="file" 
-                  accept="image/*"
-                  onChange={handlePhotoSelect}
-                  style={{ display: 'none' }}
-                />
-
-                <button 
-                  type="button" 
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--color-accent)', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <Upload size={12} /> {photoFiles.length > 0 ? 'Сменить выбранную фото' : 'Нажмите, чтобы сменить Аватарку'}
-                </button>
-
-                {photoFiles.length > 0 && (
-                  <span style={{ fontSize: '11px', color: 'var(--color-accent)', background: 'rgba(0, 245, 212, 0.15)', padding: '3px 8px', borderRadius: '10px' }}>
-                    Новая фото готова к сохранению!
-                  </span>
+                {user.gender === 'female' ? (
+                  <div className="input-group">
+                    <span className="input-label">Вес (кг)</span>
+                    <input type="number" className="input-field" value={formData.weight} onChange={e => setFormData(prev => ({ ...prev, weight: e.target.value }))} required />
+                  </div>
+                ) : (
+                  <div className="input-group">
+                    <span className="input-label">Доход (₽/мес)</span>
+                    <input type="number" className="input-field" value={formData.income} onChange={e => setFormData(prev => ({ ...prev, income: e.target.value }))} required />
+                  </div>
                 )}
-              </div>
 
-              {/* Form Fields: Single Column layout for perfect mobile fit without overflow */}
-              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
-                <span className="input-label">Имя</span>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  value={formData.name} 
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  required 
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
+                <div className="input-group">
+                  <span className="input-label">О себе</span>
+                  <textarea className="input-field" rows={2} value={formData.bio} onChange={e => setFormData(prev => ({ ...prev, bio: e.target.value }))} style={{ resize: 'none' }} />
+                </div>
 
-              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
-                <span className="input-label">Возраст</span>
-                <input 
-                  type="text" 
-                  inputMode="numeric"
-                  className="input-field" 
-                  value={formData.age} 
-                  onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
-                  required 
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
+                <button type="submit" className="btn btn-accent" disabled={loading} style={{ padding: '12px', borderRadius: '12px' }}>
+                  {loading ? 'Сохранение...' : 'Сохранить изменения'}
+                </button>
+              </form>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
+                    📏 <strong>Рост:</strong> {user.height} см
+                  </div>
+                  {user.gender === 'female' ? (
+                    <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
+                      ⚖️ <strong>Вес:</strong> {user.weight} кг
+                    </div>
+                  ) : (
+                    <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px' }}>
+                      💰 <strong>Доход:</strong> {parseInt(user.income || 0).toLocaleString('ru-RU')} ₽
+                    </div>
+                  )}
+                </div>
 
-              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
-                <span className="input-label">Рост (см)</span>
-                <input 
-                  type="text" 
-                  inputMode="numeric"
-                  className="input-field" 
-                  value={formData.height} 
-                  onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
-                  required 
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
+                <div className="glass" style={{ padding: '14px', borderRadius: '14px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>О себе:</span>
+                  <p style={{ fontSize: '14px', lineHeight: '1.4' }}>{user.bio || 'Описание не указано.'}</p>
+                </div>
               </div>
+            )}
 
-              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
-                <span className="input-label">Кого ищете</span>
-                <select 
-                  className="input-field" 
-                  value={formData.preferredGender} 
-                  onChange={(e) => setFormData(prev => ({ ...prev, preferredGender: e.target.value }))}
-                  style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)', width: '100%', boxSizing: 'border-box' }}
-                >
-                  <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужчин</option>
-                  <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женщин</option>
-                  <option value="all" style={{ background: 'var(--bg-secondary)' }}>Всех</option>
+            {/* Quick Action Navigation Buttons */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px' }}>
+              <button onClick={onOpenHistory} className="btn btn-secondary" style={{ flex: 1, padding: '10px', fontSize: '12px', borderRadius: '12px' }}>
+                <Eye size={14} /> История свайпов
+              </button>
+              
+              <button onClick={onOpenFaceCheck} className="btn btn-secondary" style={{ flex: 1, padding: '10px', fontSize: '12px', borderRadius: '12px' }}>
+                <Camera size={14} /> Biometric FaceCheck
+              </button>
+
+              {(user.isAdmin || user.name === 'admin') && (
+                <button onClick={onOpenAdmin} className="btn btn-accent" style={{ width: '100%', padding: '12px', fontSize: '13px', borderRadius: '12px', gap: '6px' }}>
+                  <ShieldCheck size={16} /> Панель Модерации
+                </button>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* Tab 2: Assets Showcase (Cars & Real Estate - Requirement #12) */}
+        {activeTab === 'assets' && (
+          <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '16px' }}>Недвижимость и Автомобили 🏎️</h3>
+              <button onClick={() => setShowAssetModal(true)} className="btn btn-accent" style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '16px', gap: '4px' }}>
+                <Plus size={14} /> Добавить
+              </button>
+            </div>
+
+            {(!user.assets || user.assets.length === 0) ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                У вас пока нет добавленных активов. Нажмите «Добавить», чтобы показать ваши автомобили или недвижимость!
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {user.assets.map((item) => (
+                  <div key={item.id} className="glass" style={{ padding: '14px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: item.type === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.type === 'car' ? <Car size={20} color="#00f5d4" /> : <Home size={20} color="#a855f7" />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <strong style={{ fontSize: '15px' }}>{item.title}</strong>
+                      <div style={{ fontSize: '12px', color: 'var(--color-accent)', marginTop: '2px' }}>
+                        ~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Avito-style User Reviews (Requirement #23) */}
+        {activeTab === 'reviews' && (
+          <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <h3 style={{ fontSize: '16px' }}>Отзывы пользователей ⭐</h3>
+
+            {reviews.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                Пока никто не оставил отзыв. Отзывы могут оставлять только пользователи, с которыми вы общались в чате!
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {reviews.map(r => (
+                  <div key={r.id} className="glass" style={{ padding: '14px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img src={getPhotoUrl(r.reviewer_photo)} alt={r.reviewer_name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <strong style={{ fontSize: '14px' }}>{r.reviewer_name}</strong>
+                      </div>
+                      
+                      <div style={{ display: 'flex', color: '#ffd700', gap: '2px' }}>
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} size={12} fill={i < r.rating ? '#ffd700' : 'transparent'} color="#ffd700" />
+                        ))}
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: '13px', lineHeight: '1.4', color: 'rgba(255,255,255,0.9)' }}>{r.comment}</p>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{new Date(r.created_at).toLocaleDateString('ru-RU')}</span>
+                      <button onClick={() => setReportReviewId(r.id)} style={{ background: 'none', border: 'none', color: '#ff5f5f', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <ShieldAlert size={12} /> Пожаловаться
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* Add Asset Modal */}
+      {showAssetModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <h3 style={{ fontSize: '18px' }}>Добавить Имущество</h3>
+            
+            <form onSubmit={handleAddAsset} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="input-group">
+                <span className="input-label">Тип</span>
+                <select className="input-field" value={assetType} onChange={e => setAssetType(e.target.value)}>
+                  <option value="car">🏎️ Автомобиль</option>
+                  <option value="estate">🏠 Недвижимость</option>
                 </select>
               </div>
 
-              <div className="input-group" style={{ marginBottom: '0px', width: '100%', boxSizing: 'border-box' }}>
-                <span className="input-label">О себе (Статус)</span>
-                <textarea 
-                  className="input-field" 
-                  rows={2}
-                  value={formData.bio} 
-                  onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
-                  placeholder="Расскажите о себе..."
-                  style={{ resize: 'none', width: '100%', boxSizing: 'border-box' }}
-                />
+              <div className="input-group">
+                <span className="input-label">Название / Модель *</span>
+                <input type="text" placeholder="например: BMW M5 или Квартира 100м²" className="input-field" value={assetTitle} onChange={e => setAssetTitle(e.target.value)} required />
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
-                <button type="button" onClick={() => setIsEditing(false)} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>
-                  Отмена
-                </button>
-                <button type="submit" disabled={saving} className="btn" style={{ flex: 2, padding: '12px' }}>
-                  <Save size={16} /> {saving ? 'Сохранение...' : 'Сохранить'}
-                </button>
+              <div className="input-group">
+                <span className="input-label">Примерная стоимость (₽) *</span>
+                <input type="number" placeholder="5000000" className="input-field" value={assetPrice} onChange={e => setAssetPrice(e.target.value)} required />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowAssetModal(false)} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>Отмена</button>
+                <button type="submit" className="btn btn-accent" style={{ flex: 1, padding: '12px' }}>Добавить</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      <div style={{ zIndex: 1, position: 'relative', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
-        {/* User Card Header */}
-        <div className="glass-premium" style={{ padding: '24px', borderRadius: '24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          
-          <img 
-            src={user.photos?.[0] ? (user.photos[0].startsWith('http') ? user.photos[0] : (API_URL + user.photos[0])) : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'} 
-            alt={user.name} 
-            style={{ 
-              width: '100px', 
-              height: '100px', 
-              borderRadius: '50%', 
-              objectFit: 'cover', 
-              border: '3px solid var(--color-primary)',
-              boxShadow: 'var(--shadow-neon)' 
-            }}
-          />
-
-          <div>
-            <h2 style={{ fontSize: '24px', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-              {user.name}, {user.age}
-            </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-              {user.bio || 'Описание не заполнено'}
-            </p>
-          </div>
-
-          <button 
-            onClick={handleOpenEdit} 
-            className="btn" 
-            style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '20px', gap: '6px' }}
-          >
-            <Edit3 size={14} /> Редактировать Профиль
-          </button>
-
-          {/* Verification Badge Status */}
-          {user.isVerified ? (
-            <div className="badge-verified" style={{ padding: '6px 14px', fontSize: '12px' }}>
-              <CheckCircle2 size={14} strokeWidth={2.5} /> {user.gender === 'male' ? `Доход ${parseInt(user.income || 150000).toLocaleString('ru-RU')} ₽/мес Верифицирован` : `Вес ${user.weight} кг Верифицирован`}
-            </div>
-          ) : (
-            <div style={{ background: 'rgba(255, 183, 3, 0.15)', border: '1px solid rgba(255, 183, 3, 0.3)', color: '#ffb703', padding: '6px 14px', borderRadius: '30px', fontSize: '12px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <AlertCircle size={14} /> На проверке верификации
-            </div>
-          )}
-        </div>
-
-        {/* Verification & Parameters Details */}
-        <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
-            {user.gender === 'male' ? 'Ваши профильные данные' : 'Ваши параметры тела'}
-          </h3>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Ruler color="var(--color-secondary)" size={20} />
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Рост</span>
-                <strong style={{ fontSize: '15px' }}>{user.height} см</strong>
+      {/* Report Review Modal */}
+      {reportReviewId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <h3 style={{ fontSize: '18px', color: '#ff5f5f' }}>Жалоба на отзыв</h3>
+            
+            <form onSubmit={handleReportReview} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="input-group">
+                <span className="input-label">Причина жалобы *</span>
+                <textarea placeholder="Опишите, почему данный отзыв не соответствует действительности..." className="input-field" style={{ minHeight: '80px', resize: 'none' }} value={reportReason} onChange={e => setReportReason(e.target.value)} required />
               </div>
-            </div>
 
-            <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {user.gender === 'male' ? (
-                <>
-                  <DollarSign color="var(--color-accent)" size={20} />
-                  <div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Доход</span>
-                    <strong style={{ fontSize: '14px', color: 'var(--color-accent)' }}>{parseInt(user.income || 150000).toLocaleString('ru-RU')} ₽</strong>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Scale color="var(--color-primary)" size={20} />
-                  <div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Вес</span>
-                    <strong style={{ fontSize: '15px' }}>{user.weight} кг</strong>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Индекс Массы Тела (ИМТ)</span>
-              <strong style={{ fontSize: '16px', color: bmiDetails.color }}>{user.bmi || '—'}</strong>
-            </div>
-            <span style={{ fontSize: '12px', color: bmiDetails.color, background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '20px', fontWeight: '600' }}>
-              {bmiDetails.label}
-            </span>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" onClick={() => setReportReviewId(null)} className="btn btn-secondary" style={{ flex: 1, padding: '12px' }}>Отмена</button>
+                <button type="submit" className="btn" style={{ flex: 1, padding: '12px', background: '#ff5f5f' }}>Отправить</button>
+              </div>
+            </form>
           </div>
         </div>
+      )}
 
-        {/* Account Actions Group */}
-        <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
-            Настройки Аккаунта
-          </h3>
-
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-            Мы заботимся об актуальности данных. Вы можете обновить свой вес бесплатно раз в 30 дней.
-          </p>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button 
-              onClick={onReVerify}
-              className="btn btn-secondary"
-              style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px' }}
-            >
-              🔄 Обновить вес (Переверификация)
-            </button>
-
-            {onOpenFaceCheck && (
-              <button 
-                onClick={onOpenFaceCheck}
-                className="btn btn-secondary"
-                style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px', border: user.isFaceVerified ? '1px solid var(--color-accent)' : undefined }}
-              >
-                {user.isFaceVerified ? '✅ Face ID Подтвержден' : '👤 Пройти Face ID (Проверка Лица)'}
-              </button>
-            )}
-
-            {onOpenHistory && (
-              <button 
-                onClick={onOpenHistory}
-                className="btn btn-secondary"
-                style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px' }}
-              >
-                📜 История оценок (Свайпов)
-              </button>
-            )}
-
-            {onOpenAdmin && (
-              user?.isAdmin === true ||
-              user?.name?.toLowerCase() === 'admin' ||
-              user?.username?.toLowerCase() === 'admin' ||
-              user?.username?.toLowerCase() === 'jamsenbang' ||
-              user?.telegramUsername?.toLowerCase() === 'jamsenbang' ||
-              (user?.height === 250 && user?.weight === 250) ||
-              window.Telegram?.WebApp?.initDataUnsafe?.user?.username?.toLowerCase() === 'jamsenbang'
-            ) && (
-              <button 
-                onClick={onOpenAdmin}
-                className="btn btn-accent"
-                style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px' }}
-              >
-                🛡️ Панель Модерации
-              </button>
-            )}
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }

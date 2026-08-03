@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { User, Calendar, Ruler, Scale, FileText, Heart, Camera, LogIn, UserPlus } from 'lucide-react';
+import { User, Calendar, Ruler, Scale, FileText, Heart, Camera, LogIn, UserPlus, MapPin, DollarSign } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
+
+const CITIES_PRESETS = ['Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Нижний Новгород', 'Сочи', 'Краснодар', 'Уфа', 'Самара'];
 
 export default function Register({ onRegister, API_URL, tgUserId }) {
   const [activeTab, setActiveTab] = useState('register'); // 'register' | 'login'
@@ -12,7 +14,9 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
     gender: 'female',
     preferredGender: 'male',
     height: '',
-    weight: '',
+    weight: '60',
+    income: '150000',
+    city: 'Москва',
     bio: ''
   });
   const [photos, setPhotos] = useState([]);
@@ -136,8 +140,21 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.age || !formData.height || !formData.weight) {
+    
+    // Requirement #15: Strict Name Validation
+    const nameTrim = formData.name.trim();
+    if (!nameTrim || /\s/.test(nameTrim) || !/^[a-zA-Zа-яА-ЯёЁ]+$/.test(nameTrim)) {
+      setError('Пожалуйста, укажите только Ваше одно Имя (без фамилии, отчества, цифр и пробелов).');
+      return;
+    }
+
+    if (!formData.age || !formData.height) {
       setError('Пожалуйста, заполните все обязательные поля.');
+      return;
+    }
+
+    if (photos.length === 0) {
+      setError('Загрузите хотя бы 1 личную фотографию с лицом.');
       return;
     }
 
@@ -145,22 +162,22 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
     setError('');
 
     const data = new FormData();
-    data.append('name', formData.name);
+    data.append('name', nameTrim);
     data.append('age', formData.age);
     data.append('gender', formData.gender);
     data.append('preferredGender', formData.preferredGender);
     data.append('height', formData.height);
     data.append('weight', formData.weight);
+    data.append('income', formData.income);
+    data.append('city', formData.city);
     data.append('bio', formData.bio);
 
-    if (photos.length > 0) {
-      for (const photo of photos) {
-        try {
-          const compressed = await compressImage(photo);
-          data.append('photos', compressed);
-        } catch {
-          data.append('photos', photo);
-        }
+    for (const photo of photos) {
+      try {
+        const compressed = await compressImage(photo);
+        data.append('photos', compressed);
+      } catch {
+        data.append('photos', photo);
       }
     }
 
@@ -173,12 +190,11 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
         body: data
       });
 
+      const result = await response.json();
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Ошибка при регистрации');
+        throw new Error(result.error || 'Ошибка при регистрации');
       }
 
-      const result = await response.json();
       if (result.user) {
         const idToStore = result.user.telegramId || result.user.id;
         localStorage.setItem('scalemate_dev_user_id', idToStore);
@@ -257,68 +273,68 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
         </div>
 
         {error && (
-          <div style={{ background: 'rgba(255, 95, 95, 0.1)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '12px', borderRadius: '12px', fontSize: '14px', marginBottom: '15px', fontWeight: '500' }}>
+          <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '12px', borderRadius: '12px', fontSize: '13px', marginBottom: '15px', fontWeight: '500' }}>
             ⚠️ {error}
           </div>
         )}
 
         {/* Tab 1: Registration Form */}
         {activeTab === 'register' ? (
-          <form onSubmit={handleSubmit} className="glass-premium" style={{ padding: '24px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <form onSubmit={handleSubmit} className="glass-premium" style={{ padding: '24px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             
             <div className="input-group">
-              <span className="input-label"><User size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваше Имя *</span>
+              <span className="input-label"><User size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваше Имя (только Имя) *</span>
               <input 
                 type="text" 
                 name="name"
-                placeholder="Как к вам обращаться?" 
+                placeholder="Только Имя (например: Анна, Алексей)" 
                 className="input-field" 
                 value={formData.name}
                 onChange={handleInputChange}
                 required 
               />
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                ℹ️ Без фамилии, отчества и никнеймов.
+              </span>
             </div>
 
             <div className="input-group">
-              <span className="input-label"><Calendar size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Возраст *</span>
-              <input 
-                type="text"
-                inputMode="numeric"
-                name="age"
-                placeholder="18+" 
-                className="input-field" 
-                value={formData.age}
-                onChange={handleInputChange}
-                required 
-              />
-            </div>
-            
-            <div className="input-group">
-              <span className="input-label"><Ruler size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Рост (см) *</span>
-              <input 
-                type="text"
-                inputMode="numeric"
-                name="height"
-                placeholder="170" 
-                className="input-field" 
-                value={formData.height}
-                onChange={handleInputChange}
-                required 
-              />
+              <span className="input-label"><MapPin size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваш Город *</span>
+              <select name="city" className="input-field" value={formData.city} onChange={handleInputChange} style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}>
+                {CITIES_PRESETS.map(c => (
+                  <option key={c} value={c} style={{ background: 'var(--bg-secondary)' }}>{c}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="input-group">
-              <span className="input-label"><Scale size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваш Вес (кг) *</span>
-              <input 
-                type="text"
-                inputMode="decimal"
-                name="weight"
-                placeholder="70.5" 
-                className="input-field" 
-                value={formData.weight}
-                onChange={handleInputChange}
-                required 
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="input-group">
+                <span className="input-label"><Calendar size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Возраст *</span>
+                <input 
+                  type="text"
+                  inputMode="numeric"
+                  name="age"
+                  placeholder="18+" 
+                  className="input-field" 
+                  value={formData.age}
+                  onChange={handleInputChange}
+                  required 
+                />
+              </div>
+              
+              <div className="input-group">
+                <span className="input-label"><Ruler size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Рост (см) *</span>
+                <input 
+                  type="text"
+                  inputMode="numeric"
+                  name="height"
+                  placeholder="170" 
+                  className="input-field" 
+                  value={formData.height}
+                  onChange={handleInputChange}
+                  required 
+                />
+              </div>
             </div>
 
             <div className="input-group">
@@ -327,25 +343,51 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
                 <option value="female" style={{ background: 'var(--bg-secondary)' }}>Женский (Поиск Мужчин)</option>
                 <option value="male" style={{ background: 'var(--bg-secondary)' }}>Мужской (Поиск Женщин)</option>
               </select>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                🔒 Поиск автоматически настроен на противоположный пол.
-              </span>
             </div>
+
+            {formData.gender === 'female' ? (
+              <div className="input-group">
+                <span className="input-label"><Scale size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваш Вес (кг) *</span>
+                <input 
+                  type="text"
+                  inputMode="decimal"
+                  name="weight"
+                  placeholder="60.5" 
+                  className="input-field" 
+                  value={formData.weight}
+                  onChange={handleInputChange}
+                  required 
+                />
+              </div>
+            ) : (
+              <div className="input-group">
+                <span className="input-label"><DollarSign size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ежемесячный доход (₽/мес) *</span>
+                <input 
+                  type="number"
+                  name="income"
+                  placeholder="150000" 
+                  className="input-field" 
+                  value={formData.income}
+                  onChange={handleInputChange}
+                  required 
+                />
+              </div>
+            )}
 
             <div className="input-group">
               <span className="input-label"><FileText size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> О себе</span>
               <textarea 
                 name="bio"
-                placeholder="Расскажите о себе, своих увлечениях..." 
+                placeholder="Расскажите о себе, интересах..." 
                 className="input-field" 
-                style={{ minHeight: '80px', resize: 'none' }}
+                style={{ minHeight: '75px', resize: 'none' }}
                 value={formData.bio}
                 onChange={handleInputChange}
               />
             </div>
 
-            <div className="input-group" style={{ marginBottom: '25px' }}>
-              <span className="input-label"><Camera size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Фото профиля</span>
+            <div className="input-group" style={{ marginBottom: '20px' }}>
+              <span className="input-label"><Camera size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Фото профиля (Настоящее лицо) *</span>
               
               <input 
                 type="file" 
@@ -353,17 +395,18 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
                 onChange={handlePhotoChange}
                 style={{ display: 'none' }}
                 id="profile-photos-input"
+                multiple
               />
               <label 
                 htmlFor="profile-photos-input" 
                 className="btn btn-secondary" 
                 style={{ padding: '12px', fontSize: '14px', borderRadius: '12px', borderStyle: 'dashed' }}
               >
-                Загрузить с телефона
+                📸 Загрузить фото с камеры / галереи
               </label>
               {photos.length > 0 && (
-                <span style={{ fontSize: '13px', color: 'var(--color-accent)', textAlign: 'center' }}>
-                  ✓ Выбрано файлов: {photos.length}
+                <span style={{ fontSize: '13px', color: 'var(--color-accent)', textAlign: 'center', marginTop: '4px' }}>
+                  ✓ Выбрано фотографий: {photos.length}
                 </span>
               )}
             </div>
@@ -372,6 +415,7 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
               type="submit" 
               className={`btn ${loading ? 'btn-disabled' : ''}`}
               disabled={loading}
+              style={{ padding: '14px', fontSize: '15px' }}
             >
               {loading ? 'Создание профиля...' : (formData.gender === 'female' ? 'Далее: Подтвердить Вес ⚖️' : 'Далее: Проверка Дохода 💰')}
             </button>
@@ -382,7 +426,7 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
             <div style={{ textAlign: 'center', marginBottom: '10px' }}>
               <h3 style={{ fontSize: '18px', marginBottom: '6px' }}>Восстановление сессии</h3>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                Введите ваше Имя, Telegram Username или ID, чтобы войти в уже существующий профиль с любого устройства!
+                Введите ваше Имя, Telegram Username или ID для синхронизации аккаунта!
               </p>
             </div>
 
