@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Users, CheckCircle, Clock, Heart, Check, X, RefreshCw, AlertTriangle, Eye, Trash2, ShieldAlert, MessageSquare, UserX, Crown, Ban, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Users, CheckCircle, Clock, Heart, Check, X, RefreshCw, AlertTriangle, Eye, Trash2, ShieldAlert, MessageSquare, UserX, Crown, Ban, AlertCircle, Star, Car, Home, Camera, MapPin, Ruler, Scale, DollarSign } from 'lucide-react';
 
 export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const [stats, setStats] = useState(null);
@@ -11,10 +11,13 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState('');
 
-  // Inspector User Modal (Requirement #3)
+  // Inspector User Modal (Requirement #3 & Full Read-Only Profile View)
   const [selectedUser, setSelectedUser] = useState(null);
   const [inspectorData, setInspectorData] = useState(null);
   const [inspectLoading, setInspectLoading] = useState(false);
+  const [profileSubTab, setProfileSubTab] = useState('info'); // 'info' | 'photos' | 'assets' | 'reviews' | 'chats'
+  const [showBanInput, setShowBanInput] = useState(false);
+  const [showWarnInput, setShowWarnInput] = useState(false);
 
   // Warning & Ban Form states
   const [warnReason, setWarnReason] = useState('');
@@ -81,11 +84,17 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
 
   const handleInspectUser = async (u) => {
     setSelectedUser(u);
+    setProfileSubTab('info');
+    setShowBanInput(false);
+    setShowWarnInput(false);
     setInspectLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/user/${u.id}`, { headers: getAuthHeaders() });
       const data = await res.json();
-      if (res.ok) setInspectorData(data);
+      if (res.ok) {
+        setInspectorData(data);
+        if (data.user) setSelectedUser(data.user);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -104,6 +113,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
       if (res.ok) {
         setActionMessage('⚠️ Предупреждение вынесено!');
         setWarnReason('');
+        setShowWarnInput(false);
         handleInspectUser(selectedUser);
         fetchAdminData();
       }
@@ -121,6 +131,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
       if (res.ok) {
         setActionMessage('⛔ Пользователь заблокирован!');
         setBanReason('');
+        setShowBanInput(false);
         handleInspectUser(selectedUser);
         fetchAdminData();
       }
@@ -166,7 +177,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
       });
       if (response.ok) {
         setActionMessage('✅ Верификация одобрена!');
-        setTimeout(() => setActionMessage(''), 3000);
+        if (selectedUser) handleInspectUser(selectedUser);
         fetchAdminData();
       }
     } catch (err) { console.error(err); }
@@ -181,7 +192,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
       });
       if (response.ok) {
         setActionMessage('❌ Верификация отклонена.');
-        setTimeout(() => setActionMessage(''), 3000);
+        if (selectedUser) handleInspectUser(selectedUser);
         fetchAdminData();
       }
     } catch (err) { console.error(err); }
@@ -197,7 +208,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
       });
       if (response.ok) {
         setActionMessage('🗑 Пользователь удален.');
-        setTimeout(() => setActionMessage(''), 3000);
+        setSelectedUser(null);
         fetchAdminData();
       }
     } catch (err) { console.error(err); }
@@ -338,8 +349,13 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
               </div>
             ) : (
               currentList.map(u => (
-                <div key={u.id} className="glass-premium" style={{ padding: '14px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <img src={getPhotoUrl(u.photos?.[0])} alt={u.name} style={{ width: '52px', height: '52px', borderRadius: '50%', objectFit: 'cover', border: u.isBanned ? '2px solid #ff5f5f' : '2px solid var(--color-primary)' }} />
+                <div 
+                  key={u.id} 
+                  className="glass-premium" 
+                  onClick={() => handleInspectUser(u)} 
+                  style={{ padding: '14px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  <img src={getPhotoUrl(u.photos?.[0])} alt={u.name} style={{ width: '54px', height: '54px', borderRadius: '50%', objectFit: 'cover', border: u.isBanned ? '2px solid #ff5f5f' : '2px solid var(--color-primary)' }} />
                   
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -352,25 +368,9 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    {/* Detailed Inspect Modal Button */}
-                    <button onClick={() => handleInspectUser(u)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px' }} title="Инспектор">
-                      <Eye size={16} />
-                    </button>
-
-                    {u.verificationStatus === 'pending_moderation' && (
-                      <>
-                        <button onClick={() => handleApprove(u.id)} className="btn btn-accent" style={{ padding: '8px', borderRadius: '12px' }} title="Одобрить">
-                          <Check size={16} />
-                        </button>
-                        <button onClick={() => handleReject(u.id)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px', color: '#ff5f5f' }} title="Отклонить">
-                          <X size={16} />
-                        </button>
-                      </>
-                    )}
-
-                    <button onClick={() => handleDeleteUser(u.id, u.name)} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '12px', color: '#ff5f5f' }} title="Удалить">
-                      <Trash2 size={16} />
+                  <div style={{ display: 'flex', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => handleInspectUser(u)} className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '12px', borderRadius: '12px', gap: '4px' }}>
+                      <Eye size={14} /> Открыть
                     </button>
                   </div>
                 </div>
@@ -381,107 +381,292 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
 
       </div>
 
-      {/* Detailed Admin User Inspector Modal (Requirement #3) */}
+      {/* FULL READ-ONLY PROFILE VIEWER MODAL FOR MODERATION */}
       {selectedUser && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div className="glass-premium" style={{ width: '100%', maxWidth: '440px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(14px)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '440px', maxHeight: '94vh', overflowY: 'auto', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px' }}>Инспектор: {selectedUser.name}</h3>
-              <button onClick={() => setSelectedUser(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={22} /></button>
+            {/* Top Moderation Controls Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--color-accent)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  Просмотр анкети (Read-Only)
+                </span>
+                <h3 style={{ fontSize: '17px', margin: 0 }}>{selectedUser.name}, {selectedUser.age}</h3>
+              </div>
+
+              <button onClick={() => setSelectedUser(null)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '14px' }}>
+                <X size={16} /> Закрыть
+              </button>
             </div>
 
-            {inspectLoading ? (
-              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>Загрузка чатов и файлов...</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                
-                {/* Status Badges */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '10px', background: selectedUser.isBanned ? '#ff5f5f' : '#00f5d4', color: '#000', fontWeight: '700' }}>
-                    {selectedUser.isBanned ? `БАН: ${selectedUser.banReason}` : 'Активен'}
-                  </span>
-                  <span style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '10px', background: 'rgba(255, 215, 0, 0.2)', color: '#ffd700', fontWeight: '700' }}>
-                    Предупреждений: {selectedUser.warningsCount || 0}/3
-                  </span>
-                  {selectedUser.isAdmin && <span style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '10px', background: 'var(--color-primary)', color: '#fff' }}>Модератор 👑</span>}
-                </div>
+            {/* Moderation Status Badges */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '12px', background: selectedUser.isBanned ? '#ff5f5f' : 'rgba(0, 245, 212, 0.2)', color: selectedUser.isBanned ? '#fff' : '#00f5d4', fontWeight: '700' }}>
+                {selectedUser.isBanned ? `БАН: ${selectedUser.banReason}` : 'Статус: Активен'}
+              </span>
 
-                {/* Uploaded Verification Photos & Live Selfies */}
-                <div>
-                  <h4 style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '6px' }}>Загруженные фото верификации</h4>
-                  <div style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
-                    {selectedUser.verificationPhoto && (
-                      <div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Фото верификации</div>
-                        <img src={getPhotoUrl(selectedUser.verificationPhoto)} alt="Верификация" style={{ width: '90px', height: '90px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--color-accent)' }} />
-                      </div>
-                    )}
-                    {selectedUser.verificationSelfie && (
-                      <div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Камера / Селфи</div>
-                        <img src={getPhotoUrl(selectedUser.verificationSelfie)} alt="Селфи" style={{ width: '90px', height: '90px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--color-primary)' }} />
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '12px', background: 'rgba(255, 215, 0, 0.15)', color: '#ffd700', fontWeight: '700' }}>
+                Предупреждений: {selectedUser.warningsCount || 0}/3
+              </span>
 
-                {/* Warning Action Box */}
-                <div className="glass" style={{ padding: '12px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <h4 style={{ fontSize: '13px', color: '#ffd700' }}>⚠️ Вынести предупреждение</h4>
-                  <input type="text" placeholder="Причина (например: Неправдивое фото)" className="input-field" value={warnReason} onChange={e => setWarnReason(e.target.value)} style={{ padding: '8px 12px', fontSize: '12px' }} />
-                  <button onClick={handleIssueWarning} className="btn" style={{ padding: '8px', fontSize: '12px', background: '#ffd700', color: '#000' }}>
-                    Вынести предупреждение ({selectedUser.warningsCount || 0}/3)
-                  </button>
-                </div>
+              {selectedUser.isAdmin && (
+                <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '12px', background: 'var(--color-primary)', color: '#fff', fontWeight: '700' }}>
+                  Модератор 👑
+                </span>
+              )}
+            </div>
 
-                {/* Ban Action Box */}
-                <div className="glass" style={{ padding: '12px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <h4 style={{ fontSize: '13px', color: '#ff5f5f' }}>⛔ Заблокировать / Разблокировать</h4>
-                  {selectedUser.isBanned ? (
-                    <button onClick={() => handleUnbanUser(selectedUser.id)} className="btn btn-accent" style={{ padding: '8px', fontSize: '12px' }}>
-                      Снять Бан
+            {/* Moderation Actions Quick Tools */}
+            <div className="glass" style={{ padding: '12px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Действия модератора:</div>
+              
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {selectedUser.verificationStatus === 'pending_moderation' && (
+                  <>
+                    <button onClick={() => handleApprove(selectedUser.id)} className="btn btn-accent" style={{ flex: 1, padding: '8px', fontSize: '11px', gap: '4px' }}>
+                      <Check size={14} /> Одобрить
                     </button>
-                  ) : (
-                    <>
-                      <input type="text" placeholder="Причина бана" className="input-field" value={banReason} onChange={e => setBanReason(e.target.value)} style={{ padding: '8px 12px', fontSize: '12px' }} />
-                      <button onClick={handleBanUser} className="btn" style={{ padding: '8px', fontSize: '12px', background: '#ff5f5f' }}>
-                        Заблокировать пользователя
-                      </button>
-                    </>
-                  )}
-                </div>
+                    <button onClick={() => handleReject(selectedUser.id)} className="btn btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '11px', color: '#ff5f5f', gap: '4px' }}>
+                      <X size={14} /> Отклонить
+                    </button>
+                  </>
+                )}
 
-                {/* Toggle Moderator Role */}
-                <button onClick={() => handleToggleMod(selectedUser.id, selectedUser.isAdmin)} className="btn btn-secondary" style={{ padding: '10px', fontSize: '12px' }}>
-                  {selectedUser.isAdmin ? 'Снять роль Модератора' : 'Сделать Модератором 👑'}
+                <button onClick={() => setShowWarnInput(!showWarnInput)} className="btn" style={{ flex: 1, padding: '8px', fontSize: '11px', background: '#ffd700', color: '#000', gap: '4px' }}>
+                  <AlertTriangle size={14} /> Предупредить
                 </button>
 
-                {/* Chat Log Inspector */}
-                <div>
-                  <h4 style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    История сообщений в чатах ({inspectorData?.chatLogs?.length || 0})
-                  </h4>
-                  {(!inspectorData?.chatLogs || inspectorData.chatLogs.length === 0) ? (
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Нет сообщений.</p>
+                {selectedUser.isBanned ? (
+                  <button onClick={() => handleUnbanUser(selectedUser.id)} className="btn btn-accent" style={{ flex: 1, padding: '8px', fontSize: '11px', gap: '4px' }}>
+                    <ShieldCheck size={14} /> Разбанить
+                  </button>
+                ) : (
+                  <button onClick={() => setShowBanInput(!showBanInput)} className="btn" style={{ flex: 1, padding: '8px', fontSize: '11px', background: '#ff5f5f', color: '#fff', gap: '4px' }}>
+                    <Ban size={14} /> Забанить
+                  </button>
+                )}
+
+                <button onClick={() => handleToggleMod(selectedUser.id, selectedUser.isAdmin)} className="btn btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '11px', gap: '4px' }}>
+                  <Crown size={14} /> {selectedUser.isAdmin ? 'Снять Мод' : '+Модератор'}
+                </button>
+
+                <button onClick={() => setProfileSubTab('chats')} className="btn btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '11px', gap: '4px' }}>
+                  <MessageSquare size={14} /> Переписки ({inspectorData?.chatLogs?.length || 0})
+                </button>
+              </div>
+
+              {showWarnInput && (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                  <input type="text" placeholder="Причина предупреждения..." className="input-field" value={warnReason} onChange={e => setWarnReason(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px' }} />
+                  <button onClick={handleIssueWarning} className="btn" style={{ padding: '6px 12px', background: '#ffd700', color: '#000', fontSize: '11px' }}>Вынести</button>
+                </div>
+              )}
+
+              {showBanInput && (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                  <input type="text" placeholder="Причина бана..." className="input-field" value={banReason} onChange={e => setBanReason(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px' }} />
+                  <button onClick={handleBanUser} className="btn" style={{ padding: '6px 12px', background: '#ff5f5f', color: '#fff', fontSize: '11px' }}>Забанить</button>
+                </div>
+              )}
+            </div>
+
+            {/* EXACT AUTHENTIC USER PROFILE INTERFACE (READ-ONLY) */}
+            <div className="glass-premium" style={{ padding: '20px', borderRadius: '20px', textAlign: 'center', position: 'relative' }}>
+              
+              <div style={{ position: 'relative', width: '90px', height: '90px', margin: 'auto', marginBottom: '12px' }}>
+                <img 
+                  src={getPhotoUrl(selectedUser.photos?.[0])} 
+                  alt={selectedUser.name} 
+                  style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-primary)' }}
+                />
+                {selectedUser.isVerified && (
+                  <div style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'var(--color-accent)', borderRadius: '50%', padding: '4px', display: 'flex', border: '2px solid #0a0813' }}>
+                    <CheckCircle size={14} color="#000" />
+                  </div>
+                )}
+              </div>
+
+              <h2 style={{ fontSize: '20px', marginBottom: '2px' }}>{selectedUser.name}, {selectedUser.age}</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '10px' }}>📍 {selectedUser.city || 'Москва'}</p>
+
+              {/* Trust Score 0-100% Bar */}
+              <div style={{ background: 'rgba(255,255,255,0.04)', padding: '8px 12px', borderRadius: '14px', maxWidth: '260px', margin: 'auto', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Рейтинг Доверия:</span>
+                  <strong style={{ color: 'var(--color-accent)' }}>{selectedUser.trustScore || 85}%</strong>
+                </div>
+                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${selectedUser.trustScore || 85}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent))' }} />
+                </div>
+              </div>
+
+              {/* Sub-Tabs: Info - Photos - Assets - Reviews - Chats */}
+              <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '3px', borderRadius: '14px', gap: '3px', overflowX: 'auto' }}>
+                <button onClick={() => setProfileSubTab('info')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'info' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Инфо
+                </button>
+                <button onClick={() => setProfileSubTab('photos')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'photos' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Галерея ({selectedUser.photos?.length || 0})
+                </button>
+                <button onClick={() => setProfileSubTab('assets')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'assets' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Имущество ({selectedUser.assets?.length || 0})
+                </button>
+                <button onClick={() => setProfileSubTab('reviews')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'reviews' ? 'var(--color-accent)' : 'transparent', color: profileSubTab === 'reviews' ? '#000' : '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Отзывы ({inspectorData?.reviews?.length || 0})
+                </button>
+                <button onClick={() => setProfileSubTab('chats')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'chats' ? '#ff5f5f' : 'transparent', color: '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Чаты ({inspectorData?.chatLogs?.length || 0})
+                </button>
+              </div>
+
+            </div>
+
+            {/* Sub-Tab 1: Profile Parameters & Info */}
+            {profileSubTab === 'info' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
+                    📏 <strong>Рост:</strong> {selectedUser.height} см
+                  </div>
+                  {selectedUser.gender === 'female' ? (
+                    <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
+                      ⚖️ <strong>Вес:</strong> {selectedUser.weight} кг
+                    </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '200px', overflowY: 'auto' }}>
-                      {inspectorData.chatLogs.map(log => (
-                        <div key={log.chatId} className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '11px' }}>
-                          <div style={{ fontWeight: '700', marginBottom: '4px' }}>Чат с {log.partner?.name || 'Пользователем'}</div>
-                          {log.messages.map((m, i) => (
-                            <div key={i} style={{ color: String(m.senderId) === String(selectedUser.id) ? 'var(--color-accent)' : '#fff' }}>
-                              {m.text}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
+                    <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
+                      💰 <strong>Доход:</strong> {parseInt(selectedUser.income || 0).toLocaleString('ru-RU')} ₽
                     </div>
                   )}
                 </div>
 
+                <div className="glass" style={{ padding: '12px', borderRadius: '12px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>О себе:</span>
+                  <p style={{ fontSize: '13px', lineHeight: '1.4', margin: 0 }}>{selectedUser.bio || 'Описание не указано.'}</p>
+                </div>
+
+                {/* Uploaded Verification Screenshots */}
+                {(selectedUser.verificationPhoto || selectedUser.verificationSelfie) && (
+                  <div className="glass" style={{ padding: '12px', borderRadius: '12px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Фото проверки верификации:</span>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+                      {selectedUser.verificationPhoto && (
+                        <div>
+                          <div style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Загруженное фото</div>
+                          <img src={getPhotoUrl(selectedUser.verificationPhoto)} alt="Верификация" style={{ width: '80px', height: '80px', borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--color-accent)' }} />
+                        </div>
+                      )}
+                      {selectedUser.verificationSelfie && (
+                        <div>
+                          <div style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Камера / Селфи</div>
+                          <img src={getPhotoUrl(selectedUser.verificationSelfie)} alt="Селфи" style={{ width: '80px', height: '80px', borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--color-primary)' }} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Sub-Tab 2: User Photo Gallery */}
+            {profileSubTab === 'photos' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {selectedUser.photos?.map((photoUrl, idx) => (
+                  <div key={idx} className="glass" style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', height: '140px' }}>
+                    <img src={getPhotoUrl(photoUrl)} alt={`Фото ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {idx === 0 && (
+                      <span style={{ position: 'absolute', top: '6px', left: '6px', fontSize: '9px', background: 'var(--color-primary)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
+                        ★ Главная
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Sub-Tab 3: Assets Showcase */}
+            {profileSubTab === 'assets' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {(!selectedUser.assets || selectedUser.assets.length === 0) ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    У пользователя нет добавленных активов.
+                  </div>
+                ) : (
+                  selectedUser.assets.map(item => (
+                    <div key={item.id} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: item.type === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.type === 'car' ? <Car size={16} color="#00f5d4" /> : <Home size={16} color="#a855f7" />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ fontSize: '13px' }}>{item.title}</strong>
+                        <div style={{ fontSize: '11px', color: 'var(--color-accent)' }}>~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Sub-Tab 4: Avito-style Reviews */}
+            {profileSubTab === 'reviews' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {(!inspectorData?.reviews || inspectorData.reviews.length === 0) ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    У пользователя пока нет отзывов.
+                  </div>
+                ) : (
+                  inspectorData.reviews.map(r => (
+                    <div key={r.id} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '12px' }}>{r.reviewer_name}</strong>
+                        <div style={{ display: 'flex', color: '#ffd700', gap: '2px' }}>
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} size={10} fill={i < r.rating ? '#ffd700' : 'transparent'} color="#ffd700" />
+                          ))}
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '12px', margin: 0, color: 'rgba(255,255,255,0.9)' }}>{r.comment}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Sub-Tab 5: Full Chat Inspector Timeline */}
+            {profileSubTab === 'chats' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {(!inspectorData?.chatLogs || inspectorData.chatLogs.length === 0) ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    У пользователя нет активных переписок.
+                  </div>
+                ) : (
+                  inspectorData.chatLogs.map(log => (
+                    <div key={log.chatId} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '12px', color: 'var(--color-accent)' }}>
+                        💬 Диалог с {log.partner?.name || 'Партнёром'} (ID: {log.partner?.id})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '160px', overflowY: 'auto' }}>
+                        {log.messages.map((m, i) => {
+                          const isSender = String(m.senderId) === String(selectedUser.id);
+                          return (
+                            <div key={i} style={{ alignSelf: isSender ? 'flex-end' : 'flex-start', background: isSender ? 'var(--color-primary)' : 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', maxWidth: '85%' }}>
+                              {m.text}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Delete Profile Dangerous Button */}
+            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <button onClick={() => handleDeleteUser(selectedUser.id, selectedUser.name)} className="btn" style={{ width: '100%', padding: '10px', background: '#ff5f5f', fontSize: '12px', gap: '6px' }}>
+                <Trash2 size={14} /> Полностью удалить профиль
+              </button>
+            </div>
 
           </div>
         </div>
