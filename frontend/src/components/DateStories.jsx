@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MessageSquare, Star, PlusCircle, Camera, MapPin, Sparkles, X } from 'lucide-react';
+import { Heart, MessageSquare, Star, PlusCircle, Camera, MapPin, Sparkles, X, UserCheck } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
 
 export default function DateStories({ user, API_URL, tgUserId }) {
   const [stories, setStories] = useState([]);
+  const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
@@ -18,6 +19,7 @@ export default function DateStories({ user, API_URL, tgUserId }) {
 
   useEffect(() => {
     fetchStories();
+    fetchMatches();
   }, []);
 
   const getAuthHeaders = () => {
@@ -42,6 +44,23 @@ export default function DateStories({ user, API_URL, tgUserId }) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMatches = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/matches`, {
+        headers: getAuthHeaders()
+      });
+      const result = await response.json();
+      if (response.ok && result.matches) {
+        setMatches(result.matches);
+        if (result.matches.length > 0) {
+          setPartnerName(result.matches[0].user.name);
+        }
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -71,6 +90,10 @@ export default function DateStories({ user, API_URL, tgUserId }) {
 
   const handleSubmitStory = async (e) => {
     e.preventDefault();
+    if (!partnerName) {
+      setError('Выберите партнёра из списка ваших диалогов.');
+      return;
+    }
     if (!storyText.trim()) {
       setError('Пожалуйста, напишите историю вашего свидания.');
       return;
@@ -80,7 +103,7 @@ export default function DateStories({ user, API_URL, tgUserId }) {
     setError('');
 
     const data = new FormData();
-    data.append('partnerName', partnerName || 'Партнер');
+    data.append('partnerName', partnerName);
     data.append('story', storyText);
     data.append('rating', rating);
     if (photo) data.append('photo', photo);
@@ -97,7 +120,6 @@ export default function DateStories({ user, API_URL, tgUserId }) {
 
       setShowModal(false);
       setStoryText('');
-      setPartnerName('');
       setPhoto(null);
       setPhotoPreview(null);
       fetchStories();
@@ -128,7 +150,7 @@ export default function DateStories({ user, API_URL, tgUserId }) {
           </div>
 
           <button 
-            onClick={() => setShowModal(true)} 
+            onClick={() => { fetchMatches(); setShowModal(true); }} 
             className="btn btn-accent"
             style={{ padding: '8px 14px', fontSize: '12px', borderRadius: '20px', gap: '6px' }}
           >
@@ -210,7 +232,7 @@ export default function DateStories({ user, API_URL, tgUserId }) {
 
       </div>
 
-      {/* Add Story Modal */}
+      {/* Add Story Modal with Partner Selector */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="glass-premium" style={{ width: '100%', maxWidth: '400px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -223,22 +245,34 @@ export default function DateStories({ user, API_URL, tgUserId }) {
             </div>
 
             {error && (
-              <div style={{ background: 'rgba(255, 95, 95, 0.1)', color: '#ff5f5f', padding: '10px', borderRadius: '10px', fontSize: '12px' }}>
+              <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '10px', borderRadius: '12px', fontSize: '12px' }}>
                 ⚠️ {error}
               </div>
             )}
 
             <form onSubmit={handleSubmitStory} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               
+              {/* Dropdown to pick partner from active matches */}
               <div className="input-group">
-                <span className="input-label">Имя партнёра / с кем было свидание</span>
-                <input 
-                  type="text"
-                  placeholder="Имя партнера"
-                  className="input-field"
-                  value={partnerName}
-                  onChange={(e) => setPartnerName(e.target.value)}
-                />
+                <span className="input-label"><UserCheck size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Выберите партнёра по общению *</span>
+                {matches.length > 0 ? (
+                  <select 
+                    className="input-field" 
+                    value={partnerName} 
+                    onChange={(e) => setPartnerName(e.target.value)}
+                    style={{ appearance: 'none', background: 'rgba(255, 255, 255, 0.04)' }}
+                  >
+                    {matches.map(m => (
+                      <option key={m.user.id} value={m.user.name} style={{ background: 'var(--bg-secondary)' }}>
+                        {m.user.name}, {m.user.age} лет (📍 {m.user.city || 'Москва'})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ fontSize: '12px', color: '#ffb703', background: 'rgba(255, 183, 3, 0.12)', border: '1px solid rgba(255, 183, 3, 0.3)', padding: '12px', borderRadius: '12px', lineHeight: '1.4' }}>
+                    ⚠️ У вас пока нет совпадений. Начните общение с кем-то в чате, чтобы рассказать о свидании!
+                  </div>
+                )}
               </div>
 
               <div className="input-group">
@@ -285,7 +319,12 @@ export default function DateStories({ user, API_URL, tgUserId }) {
                 </label>
               </div>
 
-              <button type="submit" className={`btn btn-accent ${submitting ? 'btn-disabled' : ''}`} disabled={submitting} style={{ padding: '14px', borderRadius: '14px', marginTop: '10px' }}>
+              <button 
+                type="submit" 
+                className={`btn btn-accent ${submitting || matches.length === 0 ? 'btn-disabled' : ''}`} 
+                disabled={submitting || matches.length === 0} 
+                style={{ padding: '14px', borderRadius: '14px', marginTop: '10px' }}
+              >
                 {submitting ? 'Опубликование...' : '🚀 Опубликовать в форум'}
               </button>
             </form>
