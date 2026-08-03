@@ -310,6 +310,76 @@ app.post('/api/profile/edit', upload.array('photos', 5), async (req, res) => {
   }
 });
 
+// 2.6 Photo Management Endpoints (Add, Delete, Set Avatar)
+app.post('/api/profile/photos/add', upload.array('photos', 5), async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+    const user = await db.getUser(tgUser.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'Загрузите хотя бы одно фото' });
+    }
+
+    const newPhotos = req.files.map(f => `/uploads/${f.filename}`);
+    const updatedPhotos = [...(user.photos || []), ...newPhotos];
+    const updated = await db.updateUser(user.id, { photos: updatedPhotos });
+
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    console.error('POST /api/profile/photos/add error:', err);
+    res.status(500).json({ error: 'Ошибка при добавлении фотографий' });
+  }
+});
+
+app.post('/api/profile/photos/set-avatar', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+    const user = await db.getUser(tgUser.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    const { photoUrl } = req.body;
+    if (!photoUrl) return res.status(400).json({ error: 'Укажите photoUrl' });
+
+    const existingPhotos = user.photos || [];
+    const remaining = existingPhotos.filter(p => p !== photoUrl);
+    const updatedPhotos = [photoUrl, ...remaining];
+
+    const updated = await db.updateUser(user.id, { photos: updatedPhotos });
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    console.error('POST /api/profile/photos/set-avatar error:', err);
+    res.status(500).json({ error: 'Ошибка установки главной аватарки' });
+  }
+});
+
+app.post('/api/profile/photos/delete', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+    const user = await db.getUser(tgUser.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    const { photoUrl } = req.body;
+    if (!photoUrl) return res.status(400).json({ error: 'Укажите photoUrl' });
+
+    const existingPhotos = user.photos || [];
+    if (existingPhotos.length <= 1) {
+      return res.status(400).json({ error: 'В профиле должно оставаться хотя бы 1 фото!' });
+    }
+
+    const updatedPhotos = existingPhotos.filter(p => p !== photoUrl);
+    const updated = await db.updateUser(user.id, { photos: updatedPhotos });
+
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    console.error('POST /api/profile/photos/delete error:', err);
+    res.status(500).json({ error: 'Ошибка удаления фотографии' });
+  }
+});
+
 // Asset Showcase Endpoint (Cars & Real Estate - Requirement #12)
 app.post('/api/assets/update', async (req, res) => {
   try {

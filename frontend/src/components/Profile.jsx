@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle } from 'lucide-react';
+import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle, Trash2, Image as ImageIcon, Check } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
 import { POPULAR_SETTLEMENTS } from '../utils/cities';
 
 export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, onUpdateUser, API_URL, tgUserId }) {
-  const [activeTab, setActiveTab] = useState('info'); // 'info' | 'assets' | 'reviews'
+  const [activeTab, setActiveTab] = useState('info'); // 'info' | 'photos' | 'assets' | 'reviews'
   const [isEditing, setIsEditing] = useState(false);
   const [reviews, setReviews] = useState([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   
   // Edit Form State
   const [formData, setFormData] = useState({
@@ -24,7 +25,6 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
   const [assetType, setAssetType] = useState('car'); // 'car' | 'estate'
   const [assetTitle, setAssetTitle] = useState('');
   const [assetPrice, setAssetPrice] = useState('');
-  const [assetPhoto, setAssetPhoto] = useState(null);
 
   // Review Report Modal
   const [reportReviewId, setReportReviewId] = useState(null);
@@ -85,6 +85,77 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
     }
   };
 
+  // Add new photos to gallery or change avatar
+  const handleUploadPhotos = async (e) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setUploadingPhoto(true);
+    setError('');
+
+    const data = new FormData();
+    for (const file of e.target.files) {
+      data.append('photos', file);
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/profile/photos/add`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: data
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Ошибка загрузки фото');
+
+      onUpdateUser(result.user);
+    } catch (err) {
+      setError(getRussianErrorMessage(err));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Set photo as primary avatar
+  const handleSetAvatar = async (photoUrl) => {
+    try {
+      const response = await fetch(`${API_URL}/api/profile/photos/set-avatar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ photoUrl })
+      });
+
+      const result = await response.json();
+      if (response.ok && result.user) {
+        onUpdateUser(result.user);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Delete photo from gallery
+  const handleDeletePhoto = async (photoUrl) => {
+    if (user.photos?.length <= 1) {
+      alert('В профиле должно оставаться хотя бы 1 фото!');
+      return;
+    }
+    if (!window.confirm('Удалить эту фотографию из профиля?')) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/profile/photos/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ photoUrl })
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Ошибка удаления');
+
+      onUpdateUser(result.user);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const handleAddAsset = async (e) => {
     e.preventDefault();
     if (!assetTitle || !assetPrice) return;
@@ -141,17 +212,45 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
 
       <div style={{ zIndex: 1, position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         
-        {/* Header Profile Section */}
+        {/* Header Profile Section with Avatar Camera Overlay */}
         <div className="glass-premium" style={{ padding: '24px', borderRadius: '24px', textAlign: 'center', position: 'relative' }}>
           
-          <div style={{ position: 'relative', width: '100px', height: '100px', margin: 'auto', marginBottom: '14px' }}>
+          <div style={{ position: 'relative', width: '104px', height: '104px', margin: 'auto', marginBottom: '14px' }}>
             <img 
               src={getPhotoUrl(user.photos?.[0])} 
               alt={user.name} 
-              style={{ width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-primary)' }}
+              style={{ width: '104px', height: '104px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-primary)' }}
             />
+
+            {/* Change Avatar Camera Button */}
+            <label 
+              htmlFor="avatar-change-input" 
+              style={{ 
+                position: 'absolute', 
+                bottom: 0, 
+                right: 0, 
+                background: 'var(--color-primary)', 
+                borderRadius: '50%', 
+                padding: '7px', 
+                cursor: 'pointer', 
+                border: '2px solid #0a0813', 
+                display: 'flex', 
+                boxShadow: 'var(--shadow-neon)' 
+              }}
+              title="Сменить аватарку"
+            >
+              <Camera size={16} color="#fff" />
+              <input 
+                type="file" 
+                id="avatar-change-input" 
+                accept="image/*" 
+                onChange={handleUploadPhotos} 
+                style={{ display: 'none' }} 
+              />
+            </label>
+
             {user.isVerified && (
-              <div style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'var(--color-accent)', borderRadius: '50%', padding: '4px', display: 'flex', border: '2px solid #0a0813' }}>
+              <div style={{ position: 'absolute', top: '2px', right: '2px', background: 'var(--color-accent)', borderRadius: '50%', padding: '4px', display: 'flex', border: '2px solid #0a0813' }}>
                 <CheckCircle2 size={16} color="#000" />
               </div>
             )}
@@ -171,15 +270,18 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
             </div>
           </div>
 
-          {/* Sub-Tabs: Info - Assets - Reviews */}
+          {/* Sub-Tabs: Info - Photos - Assets - Reviews */}
           <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '16px', gap: '4px' }}>
-            <button onClick={() => setActiveTab('info')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'info' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+            <button onClick={() => setActiveTab('info')} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: activeTab === 'info' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
               Инфо
             </button>
-            <button onClick={() => setActiveTab('assets')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'assets' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+            <button onClick={() => setActiveTab('photos')} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: activeTab === 'photos' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
+              Галерея ({user.photos?.length || 0})
+            </button>
+            <button onClick={() => setActiveTab('assets')} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: activeTab === 'assets' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
               Имущество
             </button>
-            <button onClick={() => setActiveTab('reviews')} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', background: activeTab === 'reviews' ? 'var(--color-accent)' : 'transparent', color: activeTab === 'reviews' ? '#000' : '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+            <button onClick={() => setActiveTab('reviews')} style={{ flex: 1, padding: '8px 4px', borderRadius: '12px', border: 'none', background: activeTab === 'reviews' ? 'var(--color-accent)' : 'transparent', color: activeTab === 'reviews' ? '#000' : '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
               Отзывы ({reviews.length})
             </button>
           </div>
@@ -297,7 +399,67 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           </div>
         )}
 
-        {/* Tab 2: Assets Showcase (Cars & Real Estate) */}
+        {/* Tab 2: Profile Photos Gallery Management */}
+        {activeTab === 'photos' && (
+          <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '16px' }}>Галерея профиля 📸</h3>
+              
+              <label htmlFor="gallery-add-input" className="btn btn-accent" style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '16px', gap: '4px', cursor: 'pointer' }}>
+                <Plus size={14} /> {uploadingPhoto ? 'Загрузка...' : 'Добавить фото'}
+                <input 
+                  type="file" 
+                  id="gallery-add-input" 
+                  accept="image/*" 
+                  multiple 
+                  onChange={handleUploadPhotos} 
+                  style={{ display: 'none' }}
+                  disabled={uploadingPhoto}
+                />
+              </label>
+            </div>
+
+            {error && <div style={{ color: '#ff5f5f', fontSize: '12px' }}>⚠️ {error}</div>}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {user.photos?.map((photoUrl, idx) => {
+                const isMain = idx === 0;
+                return (
+                  <div key={idx} className="glass" style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', height: '180px', display: 'flex', flexDirection: 'column' }}>
+                    <img src={getPhotoUrl(photoUrl)} alt={`Фото ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    
+                    {/* Main Avatar Badge or Set Main Button */}
+                    <div style={{ position: 'absolute', top: '8px', left: '8px', right: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {isMain ? (
+                        <span style={{ fontSize: '10px', background: 'var(--color-primary)', color: '#fff', padding: '3px 8px', borderRadius: '10px', fontWeight: '700' }}>
+                          ★ Главная
+                        </span>
+                      ) : (
+                        <button 
+                          onClick={() => handleSetAvatar(photoUrl)}
+                          style={{ fontSize: '10px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: '3px 8px', borderRadius: '10px', cursor: 'pointer' }}
+                        >
+                          ★ На главную
+                        </button>
+                      )}
+
+                      {/* Delete Photo Button */}
+                      <button 
+                        onClick={() => handleDeletePhoto(photoUrl)}
+                        style={{ background: 'rgba(255, 95, 95, 0.8)', border: 'none', color: '#fff', padding: '4px', borderRadius: '50%', cursor: 'pointer' }}
+                        title="Удалить фото"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Assets Showcase (Cars & Real Estate) */}
         {activeTab === 'assets' && (
           <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -331,7 +493,7 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
           </div>
         )}
 
-        {/* Tab 3: Avito-style User Reviews */}
+        {/* Tab 4: Avito-style User Reviews */}
         {activeTab === 'reviews' && (
           <div className="glass-premium" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <h3 style={{ fontSize: '16px' }}>Отзывы пользователей ⭐</h3>
