@@ -252,27 +252,40 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
               <Filter size={14} /> Кого вы ищете?
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-              <button
-                className={`btn ${preferredGender === 'any' ? 'btn-primary' : 'btn-glass'}`}
-                style={{ padding: '8px 4px', fontSize: '13px', borderRadius: '12px' }}
-                onClick={() => setPreferredGender('any')}
-              >
-                Неважно 🎲
-              </button>
-              <button
-                className={`btn ${preferredGender === 'female' ? 'btn-primary' : 'btn-glass'}`}
-                style={{ padding: '8px 4px', fontSize: '13px', borderRadius: '12px' }}
-                onClick={() => setPreferredGender('female')}
-              >
-                Девушку 👩
-              </button>
-              <button
-                className={`btn ${preferredGender === 'male' ? 'btn-primary' : 'btn-glass'}`}
-                style={{ padding: '8px 4px', fontSize: '13px', borderRadius: '12px' }}
-                onClick={() => setPreferredGender('male')}
-              >
-                Парня 👨
-              </button>
+              {[
+                { id: 'any', label: 'Неважно 🎲' },
+                { id: 'female', label: 'Девушку 👩' },
+                { id: 'male', label: 'Парня 👨' }
+              ].map((item) => {
+                const isActive = preferredGender === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    style={{
+                      padding: '10px 4px',
+                      fontSize: '13px',
+                      borderRadius: '14px',
+                      cursor: 'pointer',
+                      transition: 'all 0.25s ease',
+                      background: isActive 
+                        ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' 
+                        : 'rgba(255, 255, 255, 0.05)',
+                      border: isActive ? '2px solid #ffffff' : '1px solid rgba(255, 255, 255, 0.12)',
+                      color: isActive ? '#ffffff' : 'var(--text-muted)',
+                      boxShadow: isActive ? '0 0 18px rgba(255, 75, 110, 0.4)' : 'none',
+                      fontWeight: isActive ? '700' : '500',
+                      transform: isActive ? 'scale(1.04)' : 'scale(1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onClick={() => setPreferredGender(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
