@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
-import { User, Calendar, Ruler, Scale, FileText, Heart, Camera, LogIn, UserPlus, MapPin, DollarSign } from 'lucide-react';
+import { User, Calendar, Ruler, Scale, FileText, Camera, MapPin, DollarSign } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
 import { POPULAR_SETTLEMENTS } from '../utils/cities';
 
 const QUICK_SETTLEMENTS = ['Москва', 'Санкт-Петербург', 'Казань', 'Новосибирск', 'Екатеринбург', 'Краснодар', 'Сочи', 'Владивосток'];
 
 export default function Register({ onRegister, API_URL, tgUserId }) {
-  const [activeTab, setActiveTab] = useState('register'); // 'register' | 'login'
-  const [loginQuery, setLoginQuery] = useState('');
-
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -101,43 +98,6 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
     }
   };
 
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    if (!loginQuery.trim()) {
-      setError('Введите ваше имя или Telegram username');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-dev-user-id': tgUserId
-        },
-        body: JSON.stringify({ query: loginQuery })
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Ошибка входа');
-      }
-
-      if (result.user) {
-        const idToStore = result.user.telegramId || result.user.id;
-        localStorage.setItem('scalemate_dev_user_id', idToStore);
-        onRegister(result.user);
-      }
-    } catch (err) {
-      console.error(err);
-      setError(getRussianErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -229,64 +189,13 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
           </p>
         </div>
 
-        {/* Tab switcher: Register vs Login */}
-        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '16px', marginBottom: '20px', gap: '4px' }}>
-          <button 
-            type="button"
-            onClick={() => { setActiveTab('register'); setError(''); }}
-            style={{
-              flex: 1,
-              padding: '10px',
-              borderRadius: '12px',
-              border: 'none',
-              fontSize: '13px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              background: activeTab === 'register' ? 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' : 'transparent',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.2s'
-            }}
-          >
-            <UserPlus size={15} /> Создать профиль
-          </button>
-          
-          <button 
-            type="button"
-            onClick={() => { setActiveTab('login'); setError(''); }}
-            style={{
-              flex: 1,
-              padding: '10px',
-              borderRadius: '12px',
-              border: 'none',
-              fontSize: '13px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              background: activeTab === 'login' ? 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' : 'transparent',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.2s'
-            }}
-          >
-            <LogIn size={15} /> Войти в аккаунт
-          </button>
-        </div>
-
         {error && (
           <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '12px', borderRadius: '12px', fontSize: '13px', marginBottom: '15px', fontWeight: '500' }}>
             ⚠️ {error}
           </div>
         )}
 
-        {/* Tab 1: Registration Form */}
-        {activeTab === 'register' ? (
-          <form onSubmit={handleSubmit} className="glass-premium" style={{ padding: '24px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <form onSubmit={handleSubmit} className="glass-premium" style={{ padding: '24px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             
             <div className="input-group">
               <span className="input-label"><User size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваше Имя (только Имя) *</span>
@@ -458,38 +367,6 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
               {loading ? 'Создание профиля...' : (formData.gender === 'female' ? 'Далее: Подтвердить Вес ⚖️' : 'Далее: Проверка Дохода 💰')}
             </button>
           </form>
-        ) : (
-          /* Tab 2: Login Form for Cross-Device / Web Users */
-          <form onSubmit={handleLoginSubmit} className="glass-premium" style={{ padding: '24px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-              <h3 style={{ fontSize: '18px', marginBottom: '6px' }}>Восстановление сессии</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                Введите ваше Имя, Telegram Username или ID для синхронизации аккаунта!
-              </p>
-            </div>
-
-            <div className="input-group">
-              <span className="input-label"><User size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Имя или Telegram Username *</span>
-              <input 
-                type="text" 
-                placeholder="Например: admin или @username" 
-                className="input-field" 
-                value={loginQuery}
-                onChange={(e) => setLoginQuery(e.target.value)}
-                required 
-              />
-            </div>
-
-            <button 
-              type="submit" 
-              className={`btn btn-accent ${loading ? 'btn-disabled' : ''}`}
-              disabled={loading}
-              style={{ padding: '14px', fontSize: '15px', borderRadius: '14px' }}
-            >
-              {loading ? 'Поиск профиля...' : '🔑 Найти и Войти в Аккаунт'}
-            </button>
-          </form>
-        )}
 
       </div>
     </div>
