@@ -139,6 +139,32 @@ export async function initDB() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
+      -- Anon / Random Chat tables
+      CREATE TABLE IF NOT EXISTS anon_queue (
+        user_id TEXT PRIMARY KEY,
+        gender TEXT DEFAULT 'female',
+        preferred_gender TEXT DEFAULT 'any',
+        joined_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS anon_rooms (
+        room_id TEXT PRIMARY KEY,
+        user1_id TEXT NOT NULL,
+        user2_id TEXT NOT NULL,
+        status TEXT DEFAULT 'active',
+        user1_liked BOOLEAN DEFAULT false,
+        user2_liked BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS anon_messages (
+        id SERIAL PRIMARY KEY,
+        room_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        timestamp TIMESTAMPTZ DEFAULT NOW()
+      );
+
       -- Indexes for performance
       CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
       CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender);
@@ -146,6 +172,10 @@ export async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_users_weight ON users(weight);
       CREATE INDEX IF NOT EXISTS idx_likes_to_id ON likes(to_id);
       CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+      CREATE INDEX IF NOT EXISTS idx_anon_queue_joined ON anon_queue(joined_at);
+      CREATE INDEX IF NOT EXISTS idx_anon_rooms_user1 ON anon_rooms(user1_id);
+      CREATE INDEX IF NOT EXISTS idx_anon_rooms_user2 ON anon_rooms(user2_id);
+      CREATE INDEX IF NOT EXISTS idx_anon_messages_room ON anon_messages(room_id);
     `);
     console.log('✅ PostgreSQL tables and schemas initialized');
   } finally {
@@ -872,3 +902,230 @@ export async function changeSwipeDecision(userId, targetUserId, newAction) {
   const toStr = String(targetUserId);
   return await addLike(fromStr, toStr, newAction);
 }
+
+// ----------------------------------------------------
+// RANDOM / ANON CHAT FUNCTIONS
+// ----------------------------------------------------
+
+export async function joinAnonQueue(userId, preferredGender = 'any') {
+  const idStr = String(userId);
+  const user = await getUser(idStr);
+  if (!user) return { error: 'Пользователь не найден' };
+
+  // First check if already in an active room
+  const activeRoom = await checkAnonStatus(idStr);
+  if (activeRoom.status === 'matched') {
+    return activeRoom;
+  }
+
+  const userGender = user.gender || 'female';
+
+  // Upsert user into anon_queue
+  await pool.query(
+    `INSERT INTO anon_queue (user_id, gender, preferred_gender, joined_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET gender = $2, preferred_gender = $3, joined_at = NOW()`,
+    [idStr, userGender, preferredGender]
+  );
+
+  // Try to match with another candidate in queue
+  let candidateQuery = `
+    SELECT * FROM anon_queue 
+    WHERE user_id != $1
+  `;
+  const params = [idStr];
+
+  // Match preferred gender conditions
+  if (preferredGender !== 'any') {
+    params.push(preferredGender);
+    candidateQuery += ` AND gender = $${params.length}`;
+  }
+
+  // Candidate must also be compatible with this user's gender
+  params.push(userGender);
+  candidateQuery += ` AND (preferred_gender = 'any' OR preferred_gender = $${params.length})`;
+  candidateQuery += ` ORDER BY joined_at ASC LIMIT 1`;
+
+  const candidateRes = await pool.query(candidateQuery, params);
+
+  if (candidateRes.rows.length > 0) {
+    const candidate = candidateRes.rows[0];
+    const candidateId = candidate.user_id;
+
+    // Remove both from queue
+    await pool.query(`DELETE FROM anon_queue WHERE user_id IN ($1, $2)`, [idStr, candidateId]);
+
+    // Create room
+    const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    await pool.query(
+      `INSERT INTO anon_rooms (room_id, user1_id, user2_id, status) VALUES ($1, $2, $3, 'active')`,
+      [roomId, idStr, candidateId]
+    );
+
+    const partner = await getUser(candidateId);
+    return {
+      status: 'matched',
+      roomId,
+      partner
+    };
+  }
+
+  return { status: 'searching' };
+}
+
+export async function checkAnonStatus(userId) {
+  const idStr = String(userId);
+
+  // Check active rooms first
+  const roomRes = await pool.query(
+    `SELECT * FROM anon_rooms 
+     WHERE status = 'active' AND (user1_id = $1 OR user2_id = $1)
+     ORDER BY created_at DESC LIMIT 1`,
+    [idStr]
+  );
+
+  if (roomRes.rows.length > 0) {
+    const room = roomRes.rows[0];
+    const partnerId = room.user1_id === idStr ? room.user2_id : room.user1_id;
+    const partner = await getUser(partnerId);
+
+    const userIsUser1 = room.user1_id === idStr;
+    const userLiked = userIsUser1 ? room.user1_liked : room.user2_liked;
+    const partnerLiked = userIsUser1 ? room.user2_liked : room.user1_liked;
+
+    return {
+      status: 'matched',
+      roomId: room.room_id,
+      partner,
+      userLiked: !!userLiked,
+      partnerLiked: !!partnerLiked,
+      isMutual: !!(userLiked && partnerLiked)
+    };
+  }
+
+  // Check queue
+  const queueRes = await pool.query(`SELECT * FROM anon_queue WHERE user_id = $1`, [idStr]);
+  if (queueRes.rows.length > 0) {
+    return { status: 'searching' };
+  }
+
+  return { status: 'idle' };
+}
+
+export async function leaveAnonQueueOrRoom(userId) {
+  const idStr = String(userId);
+
+  // Remove from queue
+  await pool.query(`DELETE FROM anon_queue WHERE user_id = $1`, [idStr]);
+
+  // Close active room if in one
+  await pool.query(
+    `UPDATE anon_rooms SET status = 'closed' 
+     WHERE status = 'active' AND (user1_id = $1 OR user2_id = $1)`,
+    [idStr]
+  );
+
+  return { success: true };
+}
+
+export async function sendAnonMessage(roomId, senderId, text) {
+  const idStr = String(senderId);
+
+  // Verify room is active
+  const roomRes = await pool.query(`SELECT * FROM anon_rooms WHERE room_id = $1 AND status = 'active'`, [roomId]);
+  if (roomRes.rows.length === 0) {
+    return { error: 'Собеседник покинул чат или диалог завершен.' };
+  }
+
+  const room = roomRes.rows[0];
+  if (room.user1_id !== idStr && room.user2_id !== idStr) {
+    return { error: 'У вас нет доступа к этой комнате' };
+  }
+
+  const msgRes = await pool.query(
+    `INSERT INTO anon_messages (room_id, sender_id, text) VALUES ($1, $2, $3) RETURNING *`,
+    [roomId, idStr, text.trim()]
+  );
+
+  return { message: msgRes.rows[0] };
+}
+
+export async function getAnonMessages(roomId, userId) {
+  const idStr = String(userId);
+
+  const roomRes = await pool.query(`SELECT * FROM anon_rooms WHERE room_id = $1`, [roomId]);
+  if (roomRes.rows.length === 0) {
+    return { status: 'closed', messages: [] };
+  }
+
+  const room = roomRes.rows[0];
+  if (room.user1_id !== idStr && room.user2_id !== idStr) {
+    return { error: 'Доступ запрещен' };
+  }
+
+  const msgRes = await pool.query(
+    `SELECT * FROM anon_messages WHERE room_id = $1 ORDER BY timestamp ASC`,
+    [roomId]
+  );
+
+  const partnerId = room.user1_id === idStr ? room.user2_id : room.user1_id;
+  const partner = await getUser(partnerId);
+
+  const userIsUser1 = room.user1_id === idStr;
+  const userLiked = userIsUser1 ? room.user1_liked : room.user2_liked;
+  const partnerLiked = userIsUser1 ? room.user2_liked : room.user1_liked;
+
+  return {
+    status: room.status,
+    messages: msgRes.rows,
+    partner,
+    userLiked: !!userLiked,
+    partnerLiked: !!partnerLiked,
+    isMutual: !!(userLiked && partnerLiked)
+  };
+}
+
+export async function likeAnonPartner(roomId, userId) {
+  const idStr = String(userId);
+
+  const roomRes = await pool.query(`SELECT * FROM anon_rooms WHERE room_id = $1 AND status = 'active'`, [roomId]);
+  if (roomRes.rows.length === 0) {
+    return { error: 'Комната закрыта' };
+  }
+
+  const room = roomRes.rows[0];
+  const isUser1 = room.user1_id === idStr;
+  const partnerId = isUser1 ? room.user2_id : room.user1_id;
+
+  let updateQuery = isUser1
+    ? `UPDATE anon_rooms SET user1_liked = true WHERE room_id = $1 RETURNING *`
+    : `UPDATE anon_rooms SET user2_liked = true WHERE room_id = $1 RETURNING *`;
+
+  const updatedRes = await pool.query(updateQuery, [roomId]);
+  const updatedRoom = updatedRes.rows[0];
+
+  const mutual = updatedRoom.user1_liked && updatedRoom.user2_liked;
+
+  if (mutual) {
+    // Save mutual likes in standard table
+    await addLike(room.user1_id, room.user2_id, 'like');
+    await addLike(room.user2_id, room.user1_id, 'like');
+
+    // Transfer anon messages to permanent chat
+    const chatId = [room.user1_id, room.user2_id].sort().join('_');
+    const anonMsgs = await pool.query(`SELECT * FROM anon_messages WHERE room_id = $1 ORDER BY timestamp ASC`, [roomId]);
+    for (const msg of anonMsgs.rows) {
+      await pool.query(
+        `INSERT INTO messages (chat_id, sender_id, text, timestamp) VALUES ($1, $2, $3, $4)`,
+        [chatId, msg.sender_id, msg.text, msg.timestamp]
+      );
+    }
+  }
+
+  return {
+    success: true,
+    mutual,
+    partnerId
+  };
+}
+

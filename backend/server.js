@@ -989,17 +989,102 @@ app.post('/api/admin/approve', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/admin/reject', async (req, res) => {
+// ----------------------------------------------------
+// RANDOM / ANON CHAT API ENDPOINTS
+// ----------------------------------------------------
+
+app.post('/api/anon-chat/join', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    const isAdmin = await isAdminUser(tgUser);
-    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
-    const { userId, reason } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId обязателен' });
-    const updatedUser = await db.rejectVerification(userId, reason);
-    if (updatedUser) res.json({ success: true, user: updatedUser });
-    else res.status(404).json({ error: 'Пользователь не найден' });
-  } catch (err) { res.status(500).json({ error: 'Ошибка сервера' }); }
+    if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
+    const { preferredGender } = req.body;
+    const result = await db.joinAnonQueue(tgUser.id, preferredGender || 'any');
+    res.json(result);
+  } catch (err) {
+    console.error('Error in /api/anon-chat/join:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.get('/api/anon-chat/status', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
+    const status = await db.checkAnonStatus(tgUser.id);
+    res.json(status);
+  } catch (err) {
+    console.error('Error in /api/anon-chat/status:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.post('/api/anon-chat/leave', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
+    const result = await db.leaveAnonQueueOrRoom(tgUser.id);
+    res.json(result);
+  } catch (err) {
+    console.error('Error in /api/anon-chat/leave:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.post('/api/anon-chat/message', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
+    const { roomId, text } = req.body;
+    if (!roomId || !text) return res.status(400).json({ error: 'roomId и text обязательны' });
+    const result = await db.sendAnonMessage(roomId, tgUser.id, text);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) {
+    console.error('Error in /api/anon-chat/message:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.get('/api/anon-chat/messages', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
+    const { roomId } = req.query;
+    if (!roomId) return res.status(400).json({ error: 'roomId обязателен' });
+    const result = await db.getAnonMessages(roomId, tgUser.id);
+    res.json(result);
+  } catch (err) {
+    console.error('Error in /api/anon-chat/messages:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.post('/api/anon-chat/like', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
+    const { roomId } = req.body;
+    if (!roomId) return res.status(400).json({ error: 'roomId обязателен' });
+    const result = await db.likeAnonPartner(roomId, tgUser.id);
+    res.json(result);
+  } catch (err) {
+    console.error('Error in /api/anon-chat/like:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.post('/api/anon-chat/next', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
+    const { preferredGender } = req.body;
+    await db.leaveAnonQueueOrRoom(tgUser.id);
+    const result = await db.joinAnonQueue(tgUser.id, preferredGender || 'any');
+    res.json(result);
+  } catch (err) {
+    console.error('Error in /api/anon-chat/next:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
 });
 
 // Serve frontend build in production

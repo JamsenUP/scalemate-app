@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, MessageCircle, User, ShieldCheck, AlertCircle, RefreshCw, Trophy, MessageSquare, Ban } from 'lucide-react';
+import { Flame, MessageCircle, User, ShieldCheck, AlertCircle, RefreshCw, Trophy, MessageSquare, Ban, Shuffle } from 'lucide-react';
 import Register from './components/Register';
 import Verification from './components/Verification';
 import Deck from './components/Deck';
@@ -10,6 +10,7 @@ import SwipeHistory from './components/SwipeHistory';
 import FaceCheckModal from './components/FaceCheckModal';
 import Leaderboard from './components/Leaderboard';
 import DateStories from './components/DateStories';
+import AnonChat from './components/AnonChat';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -17,7 +18,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [bannedInfo, setBannedInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentTab, setCurrentTab] = useState('feed'); // 'feed' | 'leaderboard' | 'stories' | 'chats' | 'profile' | 'admin' | 'history'
+  const [currentTab, setCurrentTab] = useState('feed'); // 'feed' | 'anon_chat' | 'leaderboard' | 'stories' | 'chats' | 'profile' | 'admin' | 'history'
   const [activePartnerId, setActivePartnerId] = useState(null);
   const [showFaceCheck, setShowFaceCheck] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -162,6 +163,16 @@ export default function App() {
           />
         );
         break;
+      case 'anon_chat':
+        screenContent = (
+          <AnonChat 
+            user={user}
+            API_URL={API_URL}
+            tgUserId={devUserId}
+            onNavigateToChats={() => setCurrentTab('chats')}
+          />
+        );
+        break;
       case 'leaderboard':
         screenContent = (
           <Leaderboard 
@@ -247,6 +258,14 @@ export default function App() {
           >
             <Flame size={20} />
             <span>Знакомства</span>
+          </div>
+
+          <div 
+            className={`nav-item ${currentTab === 'anon_chat' ? 'active' : ''}`}
+            onClick={() => { setIsChatOpen(false); setCurrentTab('anon_chat'); }}
+          >
+            <Shuffle size={20} />
+            <span>Рулетка</span>
           </div>
 
           <div 
