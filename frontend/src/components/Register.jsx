@@ -228,13 +228,39 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
     }
   };
 
+  const handleAdminAutoLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/auto-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-dev-user-id': 'scalemate_dating'
+        }
+      });
+      const result = await response.json();
+      if (result.user) {
+        localStorage.setItem('scalemate_dev_user_id', 'scalemate_dating');
+        onRegister(result.user);
+      } else {
+        throw new Error(result.error || 'Ошибка входа админа');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Не удалось войти в админ-аккаунт. Попробуйте ещё раз.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="screen-container">
       <div className="bg-mesh mesh-1"></div>
       <div className="bg-mesh mesh-2"></div>
 
       <div style={{ zIndex: 1, position: 'relative' }}>
-        <div style={{ textAlign: 'center', marginBottom: '20px', marginTop: '10px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '15px', marginTop: '10px' }}>
           <h1 style={{ fontSize: '32px', marginBottom: '8px', background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             ScaleMate
           </h1>
@@ -242,6 +268,33 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
             Знакомства по всей России!
           </p>
         </div>
+
+        {/* Quick Admin Login button */}
+        <button 
+          type="button"
+          onClick={handleAdminAutoLogin}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '11px 14px',
+            marginBottom: '16px',
+            borderRadius: '14px',
+            border: '1px solid rgba(255, 215, 0, 0.4)',
+            background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.15))',
+            color: '#ffd700',
+            fontSize: '13px',
+            fontWeight: '700',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 15px rgba(255, 215, 0, 0.15)'
+          }}
+        >
+          👑 Вход для Администратора (@scalemate_dating)
+        </button>
 
         {error && (
           <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '12px', borderRadius: '12px', fontSize: '13px', marginBottom: '15px', fontWeight: '500' }}>

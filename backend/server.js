@@ -172,10 +172,11 @@ function getTelegramUser(req) {
 
   const devUserId = req.headers['x-dev-user-id'] || req.query.dev_user_id;
   if (devUserId) {
+    const isScalemateDating = String(devUserId).toLowerCase().includes('scalemate');
     return { 
       id: String(devUserId), 
-      first_name: 'Тест Пользователь', 
-      username: devUserId === '1005' ? 'jamsenbang' : '' 
+      first_name: isScalemateDating ? 'ScaleMate Admin' : 'Тест Пользователь', 
+      username: isScalemateDating ? 'scalemate_dating' : (devUserId === '1005' ? 'jamsenbang' : String(devUserId)) 
     };
   }
 
@@ -186,7 +187,7 @@ function getTelegramUser(req) {
 async function isAdminUser(tgUser) {
   if (!tgUser) return false;
   const username = (tgUser.username || '').toLowerCase().replace('@', '');
-  if (username === 'scalemate_dating' || username === 'jamsenbang' || username === 'admin' || tgUser.id === '1005' || tgUser.id === 'admin_master') {
+  if (username.includes('scalemate') || username === 'jamsenbang' || username === 'admin' || tgUser.id === '1005' || tgUser.id === 'admin_master') {
     return true;
   }
   const dbUser = await db.getUser(tgUser.id);
@@ -195,7 +196,7 @@ async function isAdminUser(tgUser) {
   const dbName = (dbUser.name || '').toLowerCase();
   return (
     dbUser.isAdmin === true ||
-    dbUsername === 'scalemate_dating' ||
+    dbUsername.includes('scalemate') ||
     dbUsername === 'jamsenbang' ||
     dbUsername === 'admin' ||
     dbName === 'admin' ||
@@ -209,18 +210,19 @@ async function isAdminUser(tgUser) {
 app.get('/api/profile', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser) return res.status(401).json({ error: 'Не авторизован (Telegram WebApp Session missing)' });
-
-    const usernameClean = (tgUser.username || '').toLowerCase().replace('@', '');
-    const isAdminSession = 
+    
+    let usernameClean = (tgUser?.username || '').toLowerCase().replace('@', '');
+    let isAdminSession = 
+      usernameClean.includes('scalemate') ||
       usernameClean === 'scalemate_dating' ||
       usernameClean === 'jamsenbang' ||
       usernameClean === 'admin' ||
-      tgUser.id === 'admin_master' || tgUser.id === '1005';
+      tgUser?.id === 'admin_master' || tgUser?.id === '1005';
 
-    if (isAdminSession) {
+    let user = null;
+    if (isAdminSession && tgUser) {
       user = await db.ensureAdminUser(tgUser);
-    } else {
+    } else if (tgUser) {
       user = await db.getUser(tgUser.id, tgUser.username);
     }
 
@@ -232,7 +234,7 @@ app.get('/api/profile', async (req, res) => {
       });
     }
 
-    if (user && tgUser.id && user.telegramId !== String(tgUser.id)) {
+    if (user && tgUser && tgUser.id && user.telegramId !== String(tgUser.id)) {
       user = await db.updateUser(user.id, { telegramId: String(tgUser.id) });
     }
 
@@ -244,6 +246,22 @@ app.get('/api/profile', async (req, res) => {
   } catch (err) {
     console.error('GET /api/profile error:', err);
     res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// 1.8 Instant Admin Auto-Login
+app.post('/api/admin/auto-login', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req) || { id: 'admin_scalemate_dating', username: 'scalemate_dating', first_name: 'ScaleMate Admin' };
+    const adminUser = await db.ensureAdminUser({
+      id: tgUser.id || 'admin_scalemate_dating',
+      username: 'scalemate_dating',
+      first_name: 'ScaleMate Admin'
+    });
+    res.json({ success: true, user: adminUser });
+  } catch (err) {
+    console.error('auto-login error:', err);
+    res.status(500).json({ error: 'Ошибка входа администратора' });
   }
 });
 
