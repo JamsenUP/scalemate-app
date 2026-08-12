@@ -438,6 +438,8 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
               </form>
             </div>
           </div>
+        )}
+
         {/* Partner Full Profile Modal */}
         {showPartnerProfile && partner && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
