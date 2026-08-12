@@ -99,15 +99,69 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
   };
 
 
+  const validateFirstName = (name) => {
+    if (!name || typeof name !== 'string') return { valid: false, message: 'Имя не должно быть пустым.' };
+    const trimmed = name.trim();
+
+    if (trimmed.length < 2 || trimmed.length > 20) {
+      return { valid: false, message: 'Настоящее имя должно содержать от 2 до 20 букв.' };
+    }
+
+    if (/\s/.test(trimmed)) {
+      return { valid: false, message: 'Укажите только одно Ваше Имя (без фамилии, отчества и пробелов).' };
+    }
+
+    if (!/^[a-zA-Zа-яА-ЯёЁ]+(-[a-zA-Zа-яА-ЯёЁ]+)?$/.test(trimmed)) {
+      return { valid: false, message: 'Имя может содержать только буквы (без цифр, символов и никнеймов).' };
+    }
+
+    const lower = trimmed.toLowerCase();
+
+    const invalidEndings = ['вич', 'вна', 'тич', 'нична', 'ова', 'ева', 'ина', 'ына', 'ский', 'ская', 'цкий', 'цкая', 'ов', 'ев', 'ин', 'ын'];
+    if (invalidEndings.some(ending => lower.endsWith(ending) && lower.length > 5)) {
+      return { valid: false, message: 'Укажите только Ваше личное имя (без фамилии и отчества).' };
+    }
+
+    if (/(.)\1{2,}/i.test(trimmed)) {
+      return { valid: false, message: 'Пожалуйста, введите Ваше настоящее имя.' };
+    }
+
+    if (!/[аеёиоуыэюяaeiouy]/i.test(trimmed)) {
+      return { valid: false, message: 'Имя должно быть реальным и содержать гласные буквы.' };
+    }
+
+    const fakeNamesBlacklist = new Set([
+      'admin', 'administrator', 'moderator', 'system', 'root', 'support', 'bot', 'бот', 'scalemate', 'test', 'тест',
+      'аноним', 'анонимка', 'гость', 'пользователь', 'юзер', 'user', 'девушка', 'парень', 'мужчина', 'женщина',
+      'красотка', 'малышка', 'зая', 'солнышко', 'котик', 'киска', 'мачо', 'красавчик', 'босс', 'король', 'королева',
+      'принцесса', 'принц', 'пацан', 'папик', 'мамка', 'друг', 'подруга', 'человек', 'никто', 'ктото', 'кто-то',
+      'хз', 'хд', 'нет', 'да', 'дурак', 'лох', 'сука', 'пидор', 'хуй', 'говно', 'пизда', 'блин', 'хрен', 'мать',
+      'отец', 'батя', 'дед', 'баба', 'бабушка', 'дедушка', 'брат', 'сестра', 'братан', 'братуха', 'чувак', 'тип',
+      'чел', 'lol', 'kek', 'мем', 'qwerty', 'asdfgh', 'zxcvbn'
+    ]);
+
+    if (fakeNamesBlacklist.has(lower)) {
+      return { valid: false, message: 'Укажите Ваше настоящее личное имя вместо вымышленного или никнейма.' };
+    }
+
+    // Auto-capitalize first letter of each part
+    const formatted = trimmed
+      .split('-')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join('-');
+
+    return { valid: true, name: formatted };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Requirement #15: Strict Name Validation
-    const nameTrim = formData.name.trim();
-    if (!nameTrim || /\s/.test(nameTrim) || !/^[a-zA-Zа-яА-ЯёЁ]+$/.test(nameTrim)) {
-      setError('Пожалуйста, укажите только Ваше одно Имя (без фамилии, отчества, цифр и пробелов).');
+    const nameVal = validateFirstName(formData.name);
+    if (!nameVal.valid) {
+      setError(nameVal.message);
       return;
     }
+    const nameTrim = nameVal.name;
 
     if (!formData.city || !formData.city.trim()) {
       setError('Укажите ваш населенный пункт (город, село, деревня).');

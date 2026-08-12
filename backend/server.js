@@ -94,23 +94,57 @@ function fileToPermanentUrl(file) {
   return `/uploads/${file.filename}`;
 }
 
-// Helper: Validate First Name (Requirement #15)
+// Helper: Validate Real First Name
 function validateFirstName(name) {
   if (!name || typeof name !== 'string') return { valid: false, message: 'Имя не должно быть пустым.' };
   const trimmed = name.trim();
+
   if (trimmed.length < 2 || trimmed.length > 20) {
-    return { valid: false, message: 'Имя должно содержать от 2 до 20 букв.' };
+    return { valid: false, message: 'Настоящее имя должно содержать от 2 до 20 букв.' };
   }
+
   if (/\s/.test(trimmed)) {
-    return { valid: false, message: 'Укажите только ваше Имя (без фамилии и отчества).' };
+    return { valid: false, message: 'Укажите только одно Ваше Имя (без фамилии, отчества и пробелов).' };
   }
-  if (!/^[a-zA-Zа-яА-ЯёЁ]+$/.test(trimmed)) {
-    return { valid: false, message: 'Имя может содержать только буквы (без цифр и символов).' };
+
+  // Only letters and single hyphen for double names like Anna-Maria
+  if (!/^[a-zA-Zа-яА-ЯёЁ]+(-[a-zA-Zа-яА-ЯёЁ]+)?$/.test(trimmed)) {
+    return { valid: false, message: 'Имя может содержать только буквы (без цифр, символов и никнеймов).' };
   }
+
   const lower = trimmed.toLowerCase();
-  if (lower.endsWith('вич') || lower.endsWith('вна') || lower.endsWith('тич') || lower.endsWith('нична')) {
-    return { valid: false, message: 'Укажите только Ваше имя (без отчества).' };
+
+  // Block patronymic / surname endings
+  const invalidEndings = ['вич', 'вна', 'тич', 'нична', 'ова', 'ева', 'ина', 'ына', 'ский', 'ская', 'цкий', 'цкая', 'ов', 'ев', 'ин', 'ын'];
+  if (invalidEndings.some(ending => lower.endsWith(ending) && lower.length > 5)) {
+    return { valid: false, message: 'Укажите только Ваше личное имя (без фамилии и отчества).' };
   }
+
+  // Block 3+ repeating characters (e.g. Aaaaa)
+  if (/(.)\1{2,}/i.test(trimmed)) {
+    return { valid: false, message: 'Пожалуйста, введите Ваше настоящее имя.' };
+  }
+
+  // Must contain at least 1 vowel
+  if (!/[аеёиоуыэюяaeiouy]/i.test(trimmed)) {
+    return { valid: false, message: 'Имя должно быть реальным и содержать гласные буквы.' };
+  }
+
+  // Blacklist of fake/troll words, system roles, generic terms, and profanity
+  const fakeNamesBlacklist = new Set([
+    'admin', 'administrator', 'moderator', 'system', 'root', 'support', 'bot', 'бот', 'scalemate', 'test', 'тест',
+    'аноним', 'анонимка', 'гость', 'пользователь', 'юзер', 'user', 'девушка', 'парень', 'мужчина', 'женщина',
+    'красотка', 'малышка', 'зая', 'солнышко', 'котик', 'киска', 'мачо', 'красавчик', 'босс', 'король', 'королева',
+    'принцесса', 'принц', 'пацан', 'папик', 'мамка', 'друг', 'подруга', 'человек', 'никто', 'ктото', 'кто-то',
+    'хз', 'хд', 'нет', 'да', 'дурак', 'лох', 'сука', 'пидор', 'хуй', 'говно', 'пизда', 'блин', 'хрен', 'мать',
+    'отец', 'батя', 'дед', 'баба', 'бабушка', 'дедушка', 'брат', 'сестра', 'братан', 'братуха', 'чувак', 'тип',
+    'чел', 'lol', 'kek', 'мем', 'qwerty', 'asdfgh', 'zxcvbn'
+  ]);
+
+  if (fakeNamesBlacklist.has(lower)) {
+    return { valid: false, message: 'Укажите Ваше настоящее личное имя вместо вымышленного или никнейма.' };
+  }
+
   return { valid: true };
 }
 
