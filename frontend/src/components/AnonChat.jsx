@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shuffle, Send, Heart, SkipForward, XCircle, ShieldCheck, User, Sparkles, Filter, AlertCircle, ArrowLeft } from 'lucide-react';
+import ImageViewerModal from './ImageViewerModal';
 
 export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats }) {
   const [status, setStatus] = useState('idle'); // 'idle' | 'searching' | 'matched' | 'closed'
@@ -12,10 +13,25 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
   const [partnerLiked, setPartnerLiked] = useState(false);
   const [isMutual, setIsMutual] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [viewingPhotos, setViewingPhotos] = useState(null);
   const [sendingMsg, setSendingMsg] = useState(false);
   const [notification, setNotification] = useState(null);
 
   const messagesEndRef = useRef(null);
+
+  const getPhotoUrl = (p) => {
+    if (!p) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80';
+    return p.startsWith('http') ? p : API_URL + p;
+  };
+
+  const openFullscreen = (photoUrls, index = 0) => {
+    if (!photoUrls) return;
+    const array = Array.isArray(photoUrls) ? photoUrls : [photoUrls];
+    const fullUrls = array.map(p => getPhotoUrl(p)).filter(Boolean);
+    if (fullUrls.length > 0) {
+      setViewingPhotos({ photos: fullUrls, index });
+    }
+  };
 
   const getHeaders = () => {
     const headers = { 'Content-Type': 'application/json' };
@@ -351,9 +367,14 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setShowProfileModal(true)}>
           <div style={{ position: 'relative' }}>
             <img 
-              src={partner?.photos?.[0] || partner?.verificationSelfie || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} 
+              src={getPhotoUrl(partner?.photos?.[0] || partner?.verificationSelfie || partner?.verificationPhoto)} 
               alt={partner?.name || 'Собеседник'} 
-              style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-primary)' }}
+              style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-primary)', cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                openFullscreen(partner?.photos?.length ? partner.photos : [partner?.verificationSelfie || partner?.verificationPhoto], 0);
+              }}
+              title="Нажмите для просмотра полноэкранного фото"
             />
             {partner?.isVerified && (
               <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', background: '#00e676', borderRadius: '50%', padding: '2px', display: 'flex' }}>
@@ -372,7 +393,7 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
               )}
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              {status === 'closed' ? '🔴 Дилог завершен' : '🟢 На связи • Нажмите для профиля'}
+              {status === 'closed' ? '🔴 Диалог завершен' : '🟢 На связи • Нажмите для профиля'}
             </div>
           </div>
         </div>
@@ -406,38 +427,40 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
       </div>
 
       {/* Messages List Area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(10, 8, 19, 0.5)' }}>
         
         {/* Intro banner */}
-        <div style={{ textAlign: 'center', margin: '8px 0', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', fontSize: '12px', color: 'var(--text-muted)' }}>
-          🎲 Вы подключились к случайному разговору с <b>{partner?.name || 'собеседником'}</b>! Напишите приветствие.
-        </div>
-
-        {messages.map((msg, i) => {
-          const isMe = String(msg.sender_id) === String(user?.id || tgUserId);
-          return (
-            <div 
-              key={msg.id || i}
-              style={{
-                alignSelf: isMe ? 'flex-end' : 'flex-start',
-                maxWidth: '78%',
-                padding: '12px 16px',
-                borderRadius: isMe ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                background: isMe ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' : 'rgba(255,255,255,0.08)',
-                color: '#fff',
-                fontSize: '14px',
-                lineHeight: '1.4',
-                boxShadow: isMe ? '0 4px 15px rgba(255, 75, 110, 0.3)' : 'none',
-                wordBreak: 'break-word'
-              }}
-            >
-              {msg.text}
-              <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '4px', textAlign: 'right' }}>
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {messages.length === 0 ? (
+          <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', maxWidth: '280px' }}>
+            💬 Диалог начался! Напишите приветствие первыми.
+          </div>
+        ) : (
+          messages.map((msg, i) => {
+            const isMe = String(msg.sender_id) === String(user?.id || tgUserId);
+            return (
+              <div 
+                key={msg.id || i}
+                style={{
+                  alignSelf: isMe ? 'flex-end' : 'flex-start',
+                  maxWidth: '78%',
+                  padding: '12px 16px',
+                  borderRadius: isMe ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+                  background: isMe ? 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' : 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  fontSize: '14px',
+                  lineHeight: '1.4',
+                  boxShadow: isMe ? '0 4px 15px rgba(255, 75, 110, 0.3)' : 'none',
+                  wordBreak: 'break-word'
+                }}
+              >
+                {msg.text}
+                <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '4px', textAlign: 'right' }}>
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
 
         <div ref={messagesEndRef} />
       </div>
@@ -470,11 +493,20 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
               <XCircle size={20} />
             </button>
 
-            <img 
-              src={partner.photos?.[0] || partner.verificationSelfie || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'} 
-              alt={partner.name} 
-              style={{ width: '100%', height: '260px', objectFit: 'cover', borderRadius: '20px' }}
-            />
+            <div 
+              onClick={() => openFullscreen(partner.photos?.length ? partner.photos : [partner.verificationSelfie || partner.verificationPhoto], 0)} 
+              style={{ position: 'relative', width: '100%', height: '260px', borderRadius: '20px', overflow: 'hidden', cursor: 'pointer' }}
+              title="Нажмите для полноэкранного просмотра"
+            >
+              <img 
+                src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
+                alt={partner.name} 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              />
+              <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600' }}>
+                🔍 Полноэкранное фото
+              </div>
+            </div>
 
             <div>
               <div style={{ fontSize: '20px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -507,6 +539,15 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
             </button>
           </div>
         </div>
+      )}
+
+      {/* Full-screen Photo Viewer */}
+      {viewingPhotos && (
+        <ImageViewerModal 
+          photos={viewingPhotos.photos} 
+          initialIndex={viewingPhotos.index} 
+          onClose={() => setViewingPhotos(null)} 
+        />
       )}
 
     </div>

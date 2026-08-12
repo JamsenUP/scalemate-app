@@ -258,29 +258,34 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
             <ArrowLeft size={24} />
           </button>
           
-          <img 
-            src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
-            alt={partner.name} 
-            style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', marginRight: '10px', border: '2px solid var(--color-accent)', cursor: 'pointer' }}
-            onClick={() => setShowPartnerProfile(true)}
-            title="Открыть профиль собеседника"
-          />
-
           <div 
-            style={{ display: 'flex', flexDirection: 'column', flex: 1, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '10px', cursor: 'pointer' }}
             onClick={() => setShowPartnerProfile(true)}
             title="Открыть профиль собеседника"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '15px', fontWeight: '700' }}>{partner.name}</span>
-              <span className="badge-verified" style={{ padding: '2px 6px', fontSize: '9px' }}>
-                {partner.gender === 'male' ? `💰 ${parseInt(partner.income || 0).toLocaleString('ru-RU')} ₽` : `⚖️ ${partner.weight} кг`}
+            <img 
+              src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
+              alt={partner.name} 
+              style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-accent)', cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                openFullscreen(partner.photos?.length ? partner.photos : [partner.verificationSelfie || partner.verificationPhoto], 0);
+              }}
+              title="Нажмите для полноэкранного фото"
+            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '15px', fontWeight: '700' }}>{partner.name}</span>
+                <span className="badge-verified" style={{ padding: '2px 6px', fontSize: '9px' }}>
+                  {partner.gender === 'male' ? `💰 ${parseInt(partner.income || 0).toLocaleString('ru-RU')} ₽` : `⚖️ ${partner.weight} кг`}
+                </span>
+              </div>
+              <span style={{ fontSize: '11px', color: online ? '#00f5d4' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: online ? '#00f5d4' : '#888' }} />
+                {online ? 'В сети' : `Был(а): ${new Date(partner.lastSeenAt || partner.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
               </span>
             </div>
-            <span style={{ fontSize: '11px', color: online ? '#00f5d4' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: online ? '#00f5d4' : '#888' }} />
-              {online ? 'В сети' : `Был(а): ${new Date(partner.lastSeenAt || partner.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
-            </span>
           </div>
 
           {/* Action Tools: Date Scheduler & Dice Roll */}
