@@ -150,8 +150,17 @@ function validateFirstName(name) {
 
 // Helper: Parse Telegram WebApp initData
 function getTelegramUser(req) {
+  const devUserId = req.headers['x-dev-user-id'] || req.query.dev_user_id;
+
+  if (devUserId && String(devUserId).toLowerCase().includes('scalemate')) {
+    return {
+      id: 'admin_scalemate_dating',
+      first_name: 'ScaleMate Admin',
+      username: 'scalemate_dating'
+    };
+  }
+
   const initData = req.headers['x-tg-init-data'];
-  
   if (initData) {
     try {
       const params = new URLSearchParams(initData);
@@ -170,13 +179,11 @@ function getTelegramUser(req) {
     }
   }
 
-  const devUserId = req.headers['x-dev-user-id'] || req.query.dev_user_id;
   if (devUserId) {
-    const isScalemateDating = String(devUserId).toLowerCase().includes('scalemate');
     return { 
       id: String(devUserId), 
-      first_name: isScalemateDating ? 'ScaleMate Admin' : 'Тест Пользователь', 
-      username: isScalemateDating ? 'scalemate_dating' : (devUserId === '1005' ? 'jamsenbang' : String(devUserId)) 
+      first_name: 'Тест Пользователь', 
+      username: devUserId === '1005' ? 'jamsenbang' : String(devUserId)
     };
   }
 
@@ -187,7 +194,14 @@ function getTelegramUser(req) {
 async function isAdminUser(tgUser) {
   if (!tgUser) return false;
   const username = (tgUser.username || '').toLowerCase().replace('@', '');
-  if (username.includes('scalemate') || username === 'jamsenbang' || username === 'admin' || tgUser.id === '1005' || tgUser.id === 'admin_master') {
+  if (
+    username.includes('scalemate') || 
+    username === 'jamsenbang' || 
+    username === 'admin' || 
+    tgUser.id === '1005' || 
+    tgUser.id === 'admin_master' ||
+    tgUser.id === 'admin_scalemate_dating'
+  ) {
     return true;
   }
   const dbUser = await db.getUser(tgUser.id);

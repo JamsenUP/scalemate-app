@@ -30,8 +30,9 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const getAuthHeaders = () => {
     const headers = {};
     const tgInit = window.Telegram?.WebApp?.initData;
+    const devId = localStorage.getItem('scalemate_dev_user_id') || tgUserId || 'scalemate_dating';
     if (tgInit) headers['x-tg-init-data'] = tgInit;
-    else if (tgUserId) headers['x-dev-user-id'] = tgUserId;
+    headers['x-dev-user-id'] = devId;
     return headers;
   };
 
