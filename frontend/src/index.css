@@ -1,4 +1,4 @@
-/* ScaleMate Premium CSS Design System */
+/* ScaleMate Premium Apple iOS/macOS Design System */
 
 :root {
   --bg-primary: #0a0813;
@@ -17,8 +17,12 @@
   --text-main: #ffffff;
   --text-muted: #9f9cb0;
   
-  --font-display: 'Outfit', sans-serif;
-  --font-sans: 'Inter', sans-serif;
+  /* Apple San Francisco (SF Pro Display & SF Pro Text) Font Stack */
+  --font-apple-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-apple-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --font-display: var(--font-apple-display);
+  --font-sans: var(--font-apple-text);
   
   --shadow-neon: 0 0 20px rgba(var(--primary-rgb), 0.25);
   --shadow-accent: 0 0 20px rgba(var(--accent-rgb), 0.3);
@@ -29,12 +33,18 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 html, body {
   background-color: var(--bg-primary);
   color: var(--text-main);
   font-family: var(--font-sans);
+  letter-spacing: -0.014em;
+  line-height: 1.45;
   overflow-x: hidden !important;
   overscroll-behavior-x: none;
   touch-action: pan-y;
@@ -84,11 +94,18 @@ html, body {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
-/* Typography Utilities */
-h1, h2, h3, .brand-font {
+/* Typography Utilities - Apple SF Pro Typography System */
+h1, h2, h3, h4, h5, h6, .brand-font {
   font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -0.5px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.25;
+}
+
+button, input, select, textarea, label {
+  font-family: var(--font-sans);
+  letter-spacing: -0.015em;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Page Container Layout */
