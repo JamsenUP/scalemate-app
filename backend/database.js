@@ -552,8 +552,11 @@ export async function isIpBanned(ip) {
 // ─── Likes & Matches Methods ──────────────────────────────────────
 
 export async function addLike(fromId, toId, type = 'like') {
-  const fromStr = String(fromId);
-  const toStr = String(toId);
+  const fromUser = await getUser(fromId);
+  const toUser = await getUser(toId);
+
+  const fromStr = fromUser ? String(fromUser.id) : String(fromId);
+  const toStr = toUser ? String(toUser.id) : String(toId);
 
   await pool.query(
     `INSERT INTO likes (from_id, to_id, type)
@@ -562,10 +565,23 @@ export async function addLike(fromId, toId, type = 'like') {
     [fromStr, toStr, type]
   );
 
+  // If telegram_id exists and differs from internal id, also record for telegram_id fallback
+  if (fromUser && fromUser.telegramId && String(fromUser.telegramId) !== fromStr) {
+    await pool.query(
+      `INSERT INTO likes (from_id, to_id, type)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (from_id, to_id) DO UPDATE SET type = EXCLUDED.type, timestamp = NOW()`,
+      [String(fromUser.telegramId), toStr, type]
+    );
+  }
+
   if (type === 'like') {
     const reciprocal = await pool.query(
-      `SELECT * FROM likes WHERE from_id = $1 AND to_id = $2 AND type = 'like'`,
-      [toStr, fromStr]
+      `SELECT * FROM likes 
+       WHERE (from_id = $1 OR (from_id = $2 AND $2 != '')) 
+         AND (to_id = $3 OR (to_id = $4 AND $4 != '')) 
+         AND type = 'like'`,
+      [toStr, toUser?.telegramId || '', fromStr, fromUser?.telegramId || '']
     );
     return reciprocal.rows.length > 0;
   }
@@ -573,50 +589,86 @@ export async function addLike(fromId, toId, type = 'like') {
 }
 
 export async function getLikesReceived(userId) {
-  const idStr = String(userId);
+  const currentUser = await getUser(userId);
+  if (!currentUser) return [];
+
+  const idStr = String(currentUser.id);
+  const tgIdStr = currentUser.telegramId ? String(currentUser.telegramId) : '';
+
   const res = await pool.query(
     `SELECT l.*, u.* FROM likes l
-     JOIN users u ON l.from_id = u.id
-     WHERE l.to_id = $1 
+     JOIN users u ON (l.from_id = u.id OR l.from_id = u.telegram_id)
+     WHERE (l.to_id = $1 OR (l.to_id = $2 AND $2 != '')) 
        AND l.type = 'like'
        AND l.from_id NOT IN (
-         SELECT to_id FROM likes WHERE from_id = $1
+         SELECT to_id FROM likes WHERE (from_id = $1 OR (from_id = $2 AND $2 != ''))
        )
      ORDER BY l.timestamp DESC`,
-    [idStr]
+    [idStr, tgIdStr]
   );
 
-  return res.rows.map(row => ({
-    user: rowToUser(row),
-    timestamp: row.timestamp
-  }));
+  const seenIds = new Set();
+  const result = [];
+  for (const row of res.rows) {
+    const u = rowToUser(row);
+    if (!u || u.id === currentUser.id || seenIds.has(u.id)) continue;
+    seenIds.add(u.id);
+    result.push({
+      user: u,
+      timestamp: row.timestamp
+    });
+  }
+  return result;
 }
 
 export async function getMatches(userId) {
-  const idStr = String(userId);
-  const res = await pool.query(
-    `SELECT u.* FROM likes l1
-     JOIN likes l2 ON l1.from_id = l2.to_id AND l1.to_id = l2.from_id
-     JOIN users u ON l1.to_id = u.id
-     WHERE l1.from_id = $1 AND l1.type = 'like' AND l2.type = 'like'
-     ORDER BY l1.timestamp DESC`,
-    [idStr]
+  const currentUser = await getUser(userId);
+  if (!currentUser) return [];
+
+  const idStr = String(currentUser.id);
+  const tgIdStr = currentUser.telegramId ? String(currentUser.telegramId) : '';
+
+  // 1. Get all user IDs that current user liked
+  const likedByMeRes = await pool.query(
+    `SELECT to_id FROM likes WHERE (from_id = $1 OR (from_id = $2 AND $2 != '')) AND type = 'like'`,
+    [idStr, tgIdStr]
   );
+  const likedByMeIds = likedByMeRes.rows.map(r => r.to_id);
+
+  if (likedByMeIds.length === 0) return [];
+
+  // 2. Get all user IDs that liked current user back
+  const reciprocalRes = await pool.query(
+    `SELECT from_id FROM likes WHERE (to_id = $1 OR (to_id = $2 AND $2 != '')) AND type = 'like' AND from_id = ANY($3)`,
+    [idStr, tgIdStr, likedByMeIds]
+  );
+  const matchedPartnerIds = reciprocalRes.rows.map(r => r.from_id);
+
+  if (matchedPartnerIds.length === 0) return [];
 
   const matches = [];
-  for (const row of res.rows) {
-    const partner = rowToUser(row);
-    const chatId = [idStr, partner.id].sort().join('_');
+  const processedPartnerIds = new Set();
+
+  for (const pId of matchedPartnerIds) {
+    const partner = await getUser(pId);
+    if (!partner || partner.id === currentUser.id || processedPartnerIds.has(partner.id)) continue;
+    processedPartnerIds.add(partner.id);
+
+    const chatId = [currentUser.id, partner.id].sort().join('_');
+    
+    // Check latest message in chat
     const msgRes = await pool.query(
       `SELECT * FROM messages WHERE chat_id = $1 ORDER BY timestamp DESC LIMIT 1`,
       [chatId]
     );
+
     matches.push({
       chatId,
       user: partner,
       lastMessage: msgRes.rows[0] ? rowToMessage(msgRes.rows[0]) : null
     });
   }
+
   return matches;
 }
 
@@ -1153,7 +1205,8 @@ export async function getAnonMessages(roomId, userId) {
 }
 
 export async function likeAnonPartner(roomId, userId) {
-  const idStr = String(userId);
+  const currentUser = await getUser(userId);
+  if (!currentUser) return { error: 'Пользователь не найден' };
 
   const roomRes = await pool.query(`SELECT * FROM anon_rooms WHERE room_id = $1 AND status = 'active'`, [roomId]);
   if (roomRes.rows.length === 0) {
@@ -1161,8 +1214,12 @@ export async function likeAnonPartner(roomId, userId) {
   }
 
   const room = roomRes.rows[0];
-  const isUser1 = room.user1_id === idStr;
-  const partnerId = isUser1 ? room.user2_id : room.user1_id;
+  const u1 = await getUser(room.user1_id);
+  const u2 = await getUser(room.user2_id);
+
+  if (!u1 || !u2) return { error: 'Участники диалога не найдены' };
+
+  const isUser1 = (currentUser.id === u1.id || currentUser.telegramId === u1.telegramId || String(userId) === String(room.user1_id));
 
   let updateQuery = isUser1
     ? `UPDATE anon_rooms SET user1_liked = true WHERE room_id = $1 RETURNING *`
@@ -1171,28 +1228,41 @@ export async function likeAnonPartner(roomId, userId) {
   const updatedRes = await pool.query(updateQuery, [roomId]);
   const updatedRoom = updatedRes.rows[0];
 
-  const mutual = updatedRoom.user1_liked && updatedRoom.user2_liked;
+  const mutual = Boolean(updatedRoom.user1_liked && updatedRoom.user2_liked);
 
   if (mutual) {
-    // Save mutual likes in standard table
-    await addLike(room.user1_id, room.user2_id, 'like');
-    await addLike(room.user2_id, room.user1_id, 'like');
+    // Save mutual likes in standard likes table using resolved user IDs
+    await addLike(u1.id, u2.id, 'like');
+    await addLike(u2.id, u1.id, 'like');
 
     // Transfer anon messages to permanent chat
-    const chatId = [room.user1_id, room.user2_id].sort().join('_');
+    const chatId = [u1.id, u2.id].sort().join('_');
     const anonMsgs = await pool.query(`SELECT * FROM anon_messages WHERE room_id = $1 ORDER BY timestamp ASC`, [roomId]);
     for (const msg of anonMsgs.rows) {
+      const msgSender = await getUser(msg.sender_id);
+      const actualSenderId = msgSender ? msgSender.id : msg.sender_id;
       await pool.query(
         `INSERT INTO messages (chat_id, sender_id, text, timestamp) VALUES ($1, $2, $3, $4)`,
-        [chatId, msg.sender_id, msg.text, msg.timestamp]
+        [chatId, actualSenderId, msg.text, msg.timestamp]
+      );
+    }
+
+    // Insert welcome match message if no messages exist yet so chat room is created
+    const countRes = await pool.query(`SELECT COUNT(*) FROM messages WHERE chat_id = $1`, [chatId]);
+    if (parseInt(countRes.rows[0].count) === 0) {
+      await pool.query(
+        `INSERT INTO messages (chat_id, sender_id, text, timestamp) VALUES ($1, $2, $3, NOW())`,
+        [chatId, u1.id, '🎉 Взаимная симпатия из Рулетки! Начните общение.', new Date().toISOString()]
       );
     }
   }
 
+  const partnerUser = isUser1 ? u2 : u1;
+
   return {
     success: true,
     mutual,
-    partnerId
+    partnerId: partnerUser.id
   };
 }
 
