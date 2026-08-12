@@ -312,11 +312,20 @@ export default function Deck({ user, API_URL, tgUserId, onNavigateToChat }) {
                 <h4 style={{ fontSize: '14px', color: 'var(--color-accent)', marginBottom: '8px' }}>🏎️ Недвижимость и Автомобили</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {modalUser.assets.map((item, idx) => (
-                    <div key={idx} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {item.type === 'car' ? <Car color="#00f5d4" size={20} /> : <Home color="#a855f7" size={20} />}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.title}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽</div>
+                    <div key={idx} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {item.photo && (
+                        <div style={{ position: 'relative', height: '140px', borderRadius: '10px', overflow: 'hidden' }}>
+                          <img src={getPhotoUrl(item.photo)} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: item.type === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {item.type === 'car' ? <Car color="#00f5d4" size={18} /> : <Home color="#a855f7" size={18} />}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: '700' }}>{item.title}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽</div>
+                        </div>
                       </div>
                     </div>
                   ))}

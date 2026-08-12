@@ -14,6 +14,10 @@ async function pushToRepo(repoName) {
     } catch (e) {}
 
     execSync(`git remote add origin ${cloneUrl}`);
+    execSync('git add .');
+    try {
+      execSync('git commit -m "auto-deploy updates"', { stdio: 'ignore' });
+    } catch (e) {}
     execSync('git branch -M main');
     const pushOutput = execSync('git push -u origin main --force', { encoding: 'utf8' });
     console.log(`SUCCESS! Code pushed to GitHub: https://github.com/${username}/${repoName}`);

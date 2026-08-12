@@ -317,6 +317,30 @@ app.post('/api/admin/login-password', async (req, res) => {
   }
 });
 
+// 1.9 Admin Stats
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    if (!await isAdminUser(tgUser)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const allUsers = await db.getUsers();
+    
+    // Online within last 15 mins
+    const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const onlineUsers = allUsers.filter(u => u.lastSeenAt && new Date(u.lastSeenAt) > fifteenMinsAgo).length;
+
+    res.json({
+      success: true,
+      totalUsers: allUsers.length,
+      onlineUsers
+    });
+  } catch (err) {
+    console.error('GET /api/admin/stats error:', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 // 1.5 Direct Login by Username/Name/ID
 app.post('/api/login', async (req, res) => {
   try {

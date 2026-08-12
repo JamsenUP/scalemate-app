@@ -263,21 +263,39 @@ function rowToMessage(row) {
 
 // ─── User Methods ───────────────────────────────────────────────
 
+const memoryUsers = new Map();
+
 export async function getUser(id, username = null) {
   if (!id && !username) return null;
   const idStr = id ? String(id) : '';
   const uname = username ? String(username).toLowerCase().replace('@', '') : '';
 
-  const res = await pool.query(
-    `SELECT * FROM users 
-     WHERE (id = $1 AND $1 != '') 
-        OR (telegram_id = $1 AND $1 != '') 
-        OR (LOWER(username) = $2 AND $2 != '') 
-     ORDER BY is_verified DESC, created_at DESC 
-     LIMIT 1`,
-    [idStr, uname]
-  );
-  return rowToUser(res.rows[0]);
+  try {
+    const res = await pool.query(
+      `SELECT * FROM users 
+       WHERE (id = $1 AND $1 != '') 
+          OR (telegram_id = $1 AND $1 != '') 
+          OR (LOWER(username) = $2 AND $2 != '') 
+       ORDER BY is_verified DESC, created_at DESC 
+       LIMIT 1`,
+      [idStr, uname]
+    );
+    if (res.rows.length > 0) {
+      const u = rowToUser(res.rows[0]);
+      memoryUsers.set(u.id, u);
+      return u;
+    }
+  } catch (err) {
+    console.error('DB error in getUser, using memory fallback:', err.message);
+  }
+
+  for (const u of memoryUsers.values()) {
+    if ((idStr && (u.id === idStr || String(u.telegramId) === idStr)) || 
+        (uname && String(u.username).toLowerCase() === uname)) {
+      return u;
+    }
+  }
+  return null;
 }
 
 export async function ensureAdminUser(tgUser = {}) {
@@ -360,17 +378,31 @@ export async function ensureAdminUser(tgUser = {}) {
 export async function getUserByQuery(queryStr) {
   if (!queryStr) return null;
   const q = String(queryStr).trim().toLowerCase().replace('@', '');
-  const res = await pool.query(
-    `SELECT * FROM users 
-     WHERE id = $1 
-        OR telegram_id = $1 
-        OR LOWER(username) = $1 
-        OR LOWER(name) = $1 
-     ORDER BY is_verified DESC, created_at DESC 
-     LIMIT 1`,
-    [q]
-  );
-  return rowToUser(res.rows[0]);
+  try {
+    const res = await pool.query(
+      `SELECT * FROM users 
+       WHERE id = $1 
+          OR telegram_id = $1 
+          OR LOWER(username) = $1 
+          OR LOWER(name) = $1 
+       ORDER BY is_verified DESC, created_at DESC 
+       LIMIT 1`,
+      [q]
+    );
+    if (res.rows.length > 0) {
+      const u = rowToUser(res.rows[0]);
+      memoryUsers.set(u.id, u);
+      return u;
+    }
+  } catch(err) {
+    console.error('DB error in getUserByQuery:', err.message);
+  }
+  for (const u of memoryUsers.values()) {
+    if (u.id === q || String(u.telegramId) === q || String(u.username).toLowerCase() === q || String(u.name).toLowerCase() === q) {
+      return u;
+    }
+  }
+  return null;
 }
 
 export async function getUsers() {
@@ -382,60 +414,74 @@ export async function createUser(user) {
   const id = user.telegramId || user.id || 'user_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
   const bmi = calcBmi(user.height, user.weight);
   const city = user.city || 'Москва';
-  const res = await pool.query(
-    `INSERT INTO users (
-      id, telegram_id, username, name, age, gender, preferred_gender,
-      height, weight, bmi, bio, photos, is_verified, verification_photo,
-      verification_selfie, verification_status, verification_date,
-      is_admin, is_face_verified, income, city
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7,
-      $8, $9, $10, $11, $12, $13, $14,
-      $15, $16, $17, $18, $19, $20, $21
-    )
-    ON CONFLICT (id) DO UPDATE SET
-      username = EXCLUDED.username,
-      name = EXCLUDED.name,
-      age = EXCLUDED.age,
-      gender = EXCLUDED.gender,
-      preferred_gender = EXCLUDED.preferred_gender,
-      height = EXCLUDED.height,
-      weight = EXCLUDED.weight,
-      bmi = EXCLUDED.bmi,
-      bio = EXCLUDED.bio,
-      photos = EXCLUDED.photos,
-      is_verified = EXCLUDED.is_verified,
-      verification_status = EXCLUDED.verification_status,
-      is_admin = EXCLUDED.is_admin,
-      verification_date = EXCLUDED.verification_date,
-      income = EXCLUDED.income,
-      city = EXCLUDED.city
-    RETURNING *`,
-    [
-      id,
-      user.telegramId || id,
-      user.username || null,
-      user.name || 'Аноним',
-      parseInt(user.age) || 18,
-      user.gender || 'female',
-      user.preferredGender || 'male',
-      parseInt(user.height) || 170,
-      parseFloat(user.weight) || 60,
-      bmi || 20.8,
-      user.bio || '',
-      user.photos || [],
-      user.isVerified || false,
-      user.verificationPhoto || null,
-      user.verificationSelfie || null,
-      user.verificationStatus || 'none',
-      user.verificationDate || null,
-      user.isAdmin || false,
-      user.isFaceVerified || false,
-      parseInt(user.income) || 0,
-      city
-    ]
-  );
-  return rowToUser(res.rows[0]);
+  
+  let dbUser = {
+    id,
+    telegramId: user.telegramId || id,
+    username: user.username || null,
+    name: user.name || 'Аноним',
+    age: parseInt(user.age) || 18,
+    gender: user.gender || 'female',
+    preferredGender: user.preferredGender || 'male',
+    height: parseInt(user.height) || 170,
+    weight: parseFloat(user.weight) || 60,
+    bmi: bmi || 20.8,
+    bio: user.bio || '',
+    photos: user.photos || [],
+    isVerified: user.isVerified || false,
+    verificationPhoto: user.verificationPhoto || null,
+    verificationSelfie: user.verificationSelfie || null,
+    verificationStatus: user.verificationStatus || 'none',
+    verificationDate: user.verificationDate || null,
+    isAdmin: user.isAdmin || false,
+    isFaceVerified: user.isFaceVerified || false,
+    income: parseInt(user.income) || 0,
+    city
+  };
+
+  try {
+    const res = await pool.query(
+      `INSERT INTO users (
+        id, telegram_id, username, name, age, gender, preferred_gender,
+        height, weight, bmi, bio, photos, is_verified, verification_photo,
+        verification_selfie, verification_status, verification_date,
+        is_admin, is_face_verified, income, city
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19, $20, $21
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        username = EXCLUDED.username,
+        name = EXCLUDED.name,
+        age = EXCLUDED.age,
+        gender = EXCLUDED.gender,
+        preferred_gender = EXCLUDED.preferred_gender,
+        height = EXCLUDED.height,
+        weight = EXCLUDED.weight,
+        bmi = EXCLUDED.bmi,
+        bio = EXCLUDED.bio,
+        photos = EXCLUDED.photos,
+        is_verified = EXCLUDED.is_verified,
+        verification_status = EXCLUDED.verification_status,
+        is_admin = EXCLUDED.is_admin,
+        verification_date = EXCLUDED.verification_date,
+        income = EXCLUDED.income,
+        city = EXCLUDED.city
+      RETURNING *`,
+      [
+        dbUser.id, dbUser.telegramId, dbUser.username, dbUser.name, dbUser.age, dbUser.gender, dbUser.preferredGender,
+        dbUser.height, dbUser.weight, dbUser.bmi, dbUser.bio, dbUser.photos, dbUser.isVerified, dbUser.verificationPhoto,
+        dbUser.verificationSelfie, dbUser.verificationStatus, dbUser.verificationDate, dbUser.isAdmin, dbUser.isFaceVerified, dbUser.income, dbUser.city
+      ]
+    );
+    dbUser = rowToUser(res.rows[0]);
+  } catch (err) {
+    console.error('DB error in createUser, using memory fallback:', err.message);
+  }
+  
+  memoryUsers.set(dbUser.id, dbUser);
+  return dbUser;
 }
 
 export async function updateUser(id, updateData) {
@@ -497,13 +543,32 @@ export async function updateUser(id, updateData) {
   }
 
   if (fields.length === 0) return await getUser(idStr);
-
   values.push(idStr);
-  const res = await pool.query(
-    `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} OR telegram_id = $${idx} RETURNING *`,
-    values
-  );
-  return rowToUser(res.rows[0]);
+
+  try {
+    const res = await pool.query(
+      `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} OR telegram_id = $${idx} RETURNING *`,
+      values
+    );
+    if (res.rows.length > 0) {
+      const u = rowToUser(res.rows[0]);
+      memoryUsers.set(u.id, u);
+      return u;
+    }
+  } catch (err) {
+    console.error('DB error in updateUser, using memory fallback:', err.message);
+  }
+
+  const existing = await getUser(idStr);
+  if (existing) {
+    const updated = { ...existing, ...updateData };
+    if (updateData.height || updateData.weight) {
+      updated.bmi = calcBmi(updated.height, updated.weight) || updated.bmi;
+    }
+    memoryUsers.set(updated.id, updated);
+    return updated;
+  }
+  return null;
 }
 
 export async function touchLastSeen(userId) {
