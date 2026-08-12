@@ -252,19 +252,16 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
         <form onSubmit={handleSubmit} className="glass-premium" style={{ padding: '24px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             
             <div className="input-group">
-              <span className="input-label"><User size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваше Имя (только Имя) *</span>
+              <span className="input-label"><User size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Ваше Имя *</span>
               <input 
                 type="text" 
                 name="name"
-                placeholder="Только Имя (например: Анна, Алексей)" 
+                placeholder="Например: Анна, Алексей" 
                 className="input-field" 
                 value={formData.name}
                 onChange={handleInputChange}
                 required 
               />
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                ℹ️ Без фамилии, отчества и никнеймов.
-              </span>
             </div>
 
             {/* Any Settlement Input with Autocomplete & Presets */}

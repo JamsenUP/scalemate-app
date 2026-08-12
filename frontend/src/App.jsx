@@ -304,6 +304,7 @@ export default function App() {
             user?.isAdmin === true ||
             user?.name?.toLowerCase() === 'admin' ||
             user?.username?.toLowerCase() === 'admin' ||
+            user?.username?.toLowerCase() === 'scalemate_dating' ||
             user?.username?.toLowerCase() === 'jamsenbang' ||
             (user?.height === 250 && user?.weight === 250)
           ) && (

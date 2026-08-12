@@ -182,19 +182,20 @@ function getTelegramUser(req) {
   return null;
 }
 
-// Helper: Check if caller is authorized admin (@jamsenbang, admin, master)
+// Helper: Check if caller is authorized admin (@scalemate_dating, @jamsenbang, admin, master)
 async function isAdminUser(tgUser) {
   if (!tgUser) return false;
-  const username = (tgUser.username || '').toLowerCase();
-  if (username === 'jamsenbang' || username === 'admin' || tgUser.id === '1005' || tgUser.id === 'admin_master') {
+  const username = (tgUser.username || '').toLowerCase().replace('@', '');
+  if (username === 'scalemate_dating' || username === 'jamsenbang' || username === 'admin' || tgUser.id === '1005' || tgUser.id === 'admin_master') {
     return true;
   }
   const dbUser = await db.getUser(tgUser.id);
   if (!dbUser) return false;
-  const dbUsername = (dbUser.username || '').toLowerCase();
+  const dbUsername = (dbUser.username || '').toLowerCase().replace('@', '');
   const dbName = (dbUser.name || '').toLowerCase();
   return (
     dbUser.isAdmin === true ||
+    dbUsername === 'scalemate_dating' ||
     dbUsername === 'jamsenbang' ||
     dbUsername === 'admin' ||
     dbName === 'admin' ||
@@ -212,7 +213,14 @@ app.get('/api/profile', async (req, res) => {
 
     let user = await db.getUser(tgUser.id, tgUser.username);
 
-    if (user && user.isBanned) {
+    const usernameClean = (tgUser.username || '').toLowerCase().replace('@', '');
+    const isAdminSession = 
+      usernameClean === 'scalemate_dating' ||
+      usernameClean === 'jamsenbang' ||
+      usernameClean === 'admin' ||
+      tgUser.id === 'admin_master' || tgUser.id === '1005';
+
+    if (user && user.isBanned && !isAdminSession) {
       return res.status(403).json({
         banned: true,
         banReason: user.banReason || 'Ваш аккаунт заблокирован за нарушение правил сервиса.',
@@ -224,22 +232,38 @@ app.get('/api/profile', async (req, res) => {
       user = await db.updateUser(user.id, { telegramId: String(tgUser.id) });
     }
 
-    const isAdminSession = 
-      (tgUser.username && (tgUser.username.toLowerCase() === 'admin' || tgUser.username.toLowerCase() === 'jamsenbang')) ||
-      tgUser.id === 'admin_master' || tgUser.id === '1005';
-
-    if (!user && isAdminSession) {
-      user = await db.createUser({
-        telegramId: String(tgUser.id), username: tgUser.username || 'admin',
-        name: 'admin', age: 22, gender: 'male', preferredGender: 'all',
-        height: 250, weight: 250, bmi: 40.0, city: 'Москва', bio: 'Главный Администратор Модерации 👑',
-        photos: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400'], isVerified: true, verificationStatus: 'approved',
-        isAdmin: true, verificationDate: new Date().toISOString()
-      });
+    if (isAdminSession) {
+      if (!user) {
+        user = await db.createUser({
+          telegramId: String(tgUser.id),
+          username: tgUser.username || 'scalemate_dating',
+          name: tgUser.first_name || 'ScaleMate Admin',
+          age: 25,
+          gender: 'male',
+          preferredGender: 'any',
+          height: 180,
+          weight: 75,
+          bmi: 23.1,
+          city: 'Москва',
+          bio: 'Главный Администратор Модерации ScaleMate 👑',
+          photos: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400'],
+          isVerified: true,
+          verificationStatus: 'approved',
+          isAdmin: true,
+          verificationDate: new Date().toISOString()
+        });
+      } else {
+        user = await db.updateUser(user.id, {
+          isAdmin: true,
+          isVerified: true,
+          verificationStatus: 'approved',
+          isBanned: false
+        });
+      }
     }
 
     if (user && user.isAdmin) {
-      user = await db.updateUser(user.id, { isVerified: true, verificationStatus: 'approved', isAdmin: true });
+      user = await db.updateUser(user.id, { isVerified: true, verificationStatus: 'approved', isAdmin: true, isBanned: false });
     }
 
     res.json({ user: user || null });
