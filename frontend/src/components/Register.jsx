@@ -260,7 +260,7 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
           'Content-Type': 'application/json',
           'x-dev-user-id': 'scalemate_dating'
         },
-        body: JSON.stringify({ password: adminPassword })
+        body: JSON.stringify({ password: adminPassword.trim() })
       });
 
       const result = await response.json();

@@ -948,6 +948,43 @@ app.post('/api/reviews/report', async (req, res) => {
 
 // Admin Moderation API Routes (Requirement #3)
 
+app.post('/api/admin/login-password', async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || String(password).trim() !== 'Jamsenup1!') {
+      return res.status(400).json({ error: 'Неверный пароль администратора' });
+    }
+
+    let adminUser = await db.getUser('admin_scalemate_dating');
+    if (!adminUser) {
+      adminUser = await db.createUser({
+        id: 'admin_scalemate_dating',
+        telegramId: 'scalemate_dating',
+        username: 'scalemate_dating',
+        name: 'Администратор (Jamsen)',
+        age: 25,
+        gender: 'male',
+        preferredGender: 'female',
+        height: 185,
+        weight: 75,
+        income: 1000000,
+        city: 'Москва',
+        bio: 'Главный Администратор системы ScaleMate',
+        photos: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=600'],
+        isVerified: true,
+        isAdmin: true
+      });
+    } else {
+      adminUser = await db.updateUser(adminUser.id, { isAdmin: true, isVerified: true });
+    }
+
+    res.json({ success: true, user: adminUser });
+  } catch (err) {
+    console.error('POST /api/admin/login-password error:', err);
+    res.status(500).json({ error: 'Ошибка сервера при авторизации администратора' });
+  }
+});
+
 app.get('/api/admin/stats', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
