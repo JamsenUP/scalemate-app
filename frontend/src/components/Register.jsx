@@ -21,6 +21,11 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Secret Admin Modal state
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'gender') {
@@ -155,6 +160,13 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const inputNameLower = formData.name.trim().toLowerCase();
+    if (inputNameLower === 'jamsen') {
+      setShowAdminModal(true);
+      setError('');
+      return;
+    }
     
     const nameVal = validateFirstName(formData.name);
     if (!nameVal.valid) {
@@ -228,27 +240,33 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
     }
   };
 
-  const handleAdminAutoLogin = async () => {
+  const handleAdminPasswordSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
-    setError('');
+    setAdminError('');
+
     try {
-      const response = await fetch(`${API_URL}/api/admin/auto-login`, {
+      const response = await fetch(`${API_URL}/api/admin/login-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-dev-user-id': 'scalemate_dating'
-        }
+        },
+        body: JSON.stringify({ password: adminPassword })
       });
+
       const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Неверный пароль администратора');
+      }
+
       if (result.user) {
         localStorage.setItem('scalemate_dev_user_id', 'scalemate_dating');
         onRegister(result.user);
-      } else {
-        throw new Error(result.error || 'Ошибка входа админа');
       }
     } catch (err) {
       console.error(err);
-      setError('Не удалось войти в админ-аккаунт. Попробуйте ещё раз.');
+      setAdminError(err.message || 'Неверный пароль администратора');
     } finally {
       setLoading(false);
     }
@@ -260,7 +278,7 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
       <div className="bg-mesh mesh-2"></div>
 
       <div style={{ zIndex: 1, position: 'relative' }}>
-        <div style={{ textAlign: 'center', marginBottom: '15px', marginTop: '10px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '20px', marginTop: '10px' }}>
           <h1 style={{ fontSize: '32px', marginBottom: '8px', background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             ScaleMate
           </h1>
@@ -268,33 +286,6 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
             Знакомства по всей России!
           </p>
         </div>
-
-        {/* Quick Admin Login button */}
-        <button 
-          type="button"
-          onClick={handleAdminAutoLogin}
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '11px 14px',
-            marginBottom: '16px',
-            borderRadius: '14px',
-            border: '1px solid rgba(255, 215, 0, 0.4)',
-            background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.15))',
-            color: '#ffd700',
-            fontSize: '13px',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            transition: 'all 0.2s',
-            boxShadow: '0 4px 15px rgba(255, 215, 0, 0.15)'
-          }}
-        >
-          👑 Вход для Администратора (@scalemate_dating)
-        </button>
 
         {error && (
           <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '12px', borderRadius: '12px', fontSize: '13px', marginBottom: '15px', fontWeight: '500' }}>
@@ -473,6 +464,77 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
           </form>
 
       </div>
+
+      {/* Admin Password Secret Modal */}
+      {showAdminModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div className="glass-premium" style={{
+            width: '100%',
+            maxWidth: '360px',
+            padding: '24px',
+            borderRadius: '24px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '36px', marginBottom: '10px' }}>👑</div>
+            <h3 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '8px' }}>Вход Администратора</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px', lineHeight: '1.4' }}>
+              Введите пароль администратора для доступа к аккаунту ScaleMate:
+            </p>
+
+            {adminError && (
+              <div style={{ background: 'rgba(255, 95, 95, 0.15)', border: '1px solid rgba(255, 95, 95, 0.3)', color: '#ff5f5f', padding: '10px', borderRadius: '12px', fontSize: '13px', marginBottom: '15px', fontWeight: '500' }}>
+                ⚠️ {adminError}
+              </div>
+            )}
+
+            <form onSubmit={handleAdminPasswordSubmit}>
+              <input 
+                type="password"
+                placeholder="Введите пароль..."
+                value={adminPassword}
+                onChange={(e) => { setAdminPassword(e.target.value); setAdminError(''); }}
+                className="input-field"
+                style={{ marginBottom: '15px', textAlign: 'center', fontSize: '16px', letterSpacing: '2px' }}
+                autoFocus
+                required
+              />
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowAdminModal(false); setAdminPassword(''); setAdminError(''); }}
+                  className="btn"
+                  style={{ flex: 1, background: 'rgba(255, 255, 255, 0.1)', color: '#fff' }}
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn btn-accent"
+                  style={{ flex: 1 }}
+                >
+                  {loading ? 'Проверка...' : 'Войти 🔑'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

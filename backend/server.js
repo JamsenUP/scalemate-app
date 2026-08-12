@@ -249,19 +249,25 @@ app.get('/api/profile', async (req, res) => {
   }
 });
 
-// 1.8 Instant Admin Auto-Login
-app.post('/api/admin/auto-login', async (req, res) => {
+// 1.8 Admin Password Login
+app.post('/api/admin/login-password', async (req, res) => {
   try {
+    const { password } = req.body;
+    if (password !== 'Jamsenup1!') {
+      return res.status(401).json({ error: 'Неверный пароль администратора' });
+    }
+
     const tgUser = getTelegramUser(req) || { id: 'admin_scalemate_dating', username: 'scalemate_dating', first_name: 'ScaleMate Admin' };
     const adminUser = await db.ensureAdminUser({
       id: tgUser.id || 'admin_scalemate_dating',
       username: 'scalemate_dating',
       first_name: 'ScaleMate Admin'
     });
+
     res.json({ success: true, user: adminUser });
   } catch (err) {
-    console.error('auto-login error:', err);
-    res.status(500).json({ error: 'Ошибка входа администратора' });
+    console.error('admin login-password error:', err);
+    res.status(500).json({ error: 'Ошибка сервера при авторизации' });
   }
 });
 
