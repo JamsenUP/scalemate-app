@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowLeft, MessageSquare, Scale, CheckCircle2, UserX, Heart, Dices, Calendar, MapPin, Check, X } from 'lucide-react';
+import { Send, ArrowLeft, MessageSquare, Scale, CheckCircle2, UserX, Heart, Dices, Calendar, MapPin, Check, X, Eye } from 'lucide-react';
+import ImageViewerModal from './ImageViewerModal';
 
 export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClearActivePartner, onChatOpenChange }) {
   const [matches, setMatches] = useState([]);
@@ -9,6 +10,19 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [scheduledDates, setScheduledDates] = useState([]);
+  
+  // Partner Profile Modal State
+  const [showPartnerProfile, setShowPartnerProfile] = useState(false);
+  const [viewingPhotos, setViewingPhotos] = useState(null);
+
+  const openFullscreen = (photoUrls, index = 0) => {
+    if (!photoUrls) return;
+    const array = Array.isArray(photoUrls) ? photoUrls : [photoUrls];
+    const fullUrls = array.map(p => getPhotoUrl(p)).filter(Boolean);
+    if (fullUrls.length > 0) {
+      setViewingPhotos({ photos: fullUrls, index });
+    }
+  };
   
   // Date proposal modal
   const [showDateModal, setShowDateModal] = useState(false);
@@ -245,12 +259,18 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
           </button>
           
           <img 
-            src={getPhotoUrl(partner.photos?.[0])} 
+            src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
             alt={partner.name} 
-            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', marginRight: '10px', border: '2px solid var(--color-accent)' }}
+            style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', marginRight: '10px', border: '2px solid var(--color-accent)', cursor: 'pointer' }}
+            onClick={() => setShowPartnerProfile(true)}
+            title="Открыть профиль собеседника"
           />
 
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <div 
+            style={{ display: 'flex', flexDirection: 'column', flex: 1, cursor: 'pointer' }}
+            onClick={() => setShowPartnerProfile(true)}
+            title="Открыть профиль собеседника"
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '15px', fontWeight: '700' }}>{partner.name}</span>
               <span className="badge-verified" style={{ padding: '2px 6px', fontSize: '9px' }}>
@@ -413,6 +433,113 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
               </form>
             </div>
           </div>
+        {/* Partner Full Profile Modal */}
+        {showPartnerProfile && partner && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '28px', padding: '24px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Top Bar Close Button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  Профиль собеседника
+                </span>
+                <button 
+                  onClick={() => setShowPartnerProfile(false)} 
+                  style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: '50%', width: '34px', height: '34px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Main Avatar / Photo Gallery */}
+              <div 
+                onClick={() => openFullscreen(partner.photos?.length ? partner.photos : [partner.verificationSelfie || partner.verificationPhoto], 0)} 
+                style={{ position: 'relative', width: '100%', height: '240px', borderRadius: '20px', overflow: 'hidden', cursor: 'pointer' }}
+                title="Нажмите для полноэкранного просмотра"
+              >
+                <img 
+                  src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
+                  alt={partner.name} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                />
+                <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', backdropFilter: 'blur(4px)' }}>
+                  🔍 Полноэкранное фото
+                </div>
+              </div>
+
+              {/* Profile Details */}
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ fontSize: '22px', fontWeight: '800', marginBottom: '2px' }}>
+                  {partner.name}, {partner.age}
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>📍 {partner.city || 'Москва'}</p>
+              </div>
+
+              {/* Parameters Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
+                  📏 <strong>Рост:</strong> {partner.height} см
+                </div>
+                {partner.gender === 'female' ? (
+                  <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
+                    ⚖️ <strong>Вес:</strong> {partner.weight} кг {partner.isVerified ? '✓' : ''}
+                  </div>
+                ) : (
+                  <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
+                    💰 <strong>Доход:</strong> {parseInt(partner.income || 0).toLocaleString('ru-RU')} ₽
+                  </div>
+                )}
+              </div>
+
+              {/* Trust Score */}
+              <div style={{ background: 'rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Рейтинг Доверия:</span>
+                  <strong style={{ color: 'var(--color-accent)' }}>{partner.trustScore || 85}%</strong>
+                </div>
+                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${partner.trustScore || 85}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent))' }} />
+                </div>
+              </div>
+
+              {/* Bio */}
+              {partner.bio && (
+                <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px', lineHeight: '1.4' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>О себе:</span>
+                  "{partner.bio}"
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                <button 
+                  onClick={() => { setShowPartnerProfile(false); setShowDateModal(true); }}
+                  className="btn btn-accent" 
+                  style={{ padding: '12px', fontSize: '13px', borderRadius: '14px', gap: '6px' }}
+                >
+                  <Calendar size={16} /> Назначить свидание 📍
+                </button>
+
+                <button 
+                  onClick={() => setShowPartnerProfile(false)}
+                  className="btn btn-secondary" 
+                  style={{ padding: '10px', fontSize: '12px', borderRadius: '14px' }}
+                >
+                  Вернуться к переписке 💬
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* Full-screen Photo Viewer */}
+        {viewingPhotos && (
+          <ImageViewerModal 
+            photos={viewingPhotos.photos} 
+            initialIndex={viewingPhotos.index} 
+            onClose={() => setViewingPhotos(null)} 
+          />
         )}
 
       </div>
