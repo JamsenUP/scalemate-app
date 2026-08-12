@@ -6,8 +6,8 @@ dotenv.config();
 export let bot = null;
 
 export async function startBot() {
-  const token = process.env.BOT_TOKEN;
-  const appUrl = process.env.APP_URL || 'https://scalemate-app.vercel.app';
+  const token = process.env.BOT_TOKEN || '8493874085:AAGYytvT5bTfMI-kvL7eELIWcRChpsLld_w';
+  const appUrl = process.env.APP_URL || 'https://scalemate-app-two.vercel.app';
 
   if (!token) {
     console.log('BOT_TOKEN not found in environment variables. Running in browser-only web app mode.');

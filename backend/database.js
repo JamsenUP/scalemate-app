@@ -29,6 +29,10 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000
 });
 
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client (caught to prevent crash):', err.message);
+});
+
 // Initialize tables on startup
 export async function initDB() {
   const client = await pool.connect();
