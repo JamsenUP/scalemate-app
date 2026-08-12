@@ -54,10 +54,15 @@ export default function App() {
     try {
       const headers = {};
       const tgInit = window.Telegram?.WebApp?.initData;
+      const tgUserObj = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      const unameClean = (tgUserObj?.username || '').toLowerCase().replace('@', '');
+      const isScalemateDating = unameClean === 'scalemate_dating';
+
       if (tgInit) {
         headers['x-tg-init-data'] = tgInit;
-      } else {
-        headers['x-dev-user-id'] = devUserId;
+      }
+      if (!tgInit || isScalemateDating) {
+        headers['x-dev-user-id'] = isScalemateDating ? 'scalemate_dating' : devUserId;
       }
 
       const response = await fetch(`${API_URL}/api/profile`, { headers });

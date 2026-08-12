@@ -211,14 +211,18 @@ app.get('/api/profile', async (req, res) => {
     const tgUser = getTelegramUser(req);
     if (!tgUser) return res.status(401).json({ error: 'Не авторизован (Telegram WebApp Session missing)' });
 
-    let user = await db.getUser(tgUser.id, tgUser.username);
-
     const usernameClean = (tgUser.username || '').toLowerCase().replace('@', '');
     const isAdminSession = 
       usernameClean === 'scalemate_dating' ||
       usernameClean === 'jamsenbang' ||
       usernameClean === 'admin' ||
       tgUser.id === 'admin_master' || tgUser.id === '1005';
+
+    if (isAdminSession) {
+      user = await db.ensureAdminUser(tgUser);
+    } else {
+      user = await db.getUser(tgUser.id, tgUser.username);
+    }
 
     if (user && user.isBanned && !isAdminSession) {
       return res.status(403).json({
@@ -228,38 +232,8 @@ app.get('/api/profile', async (req, res) => {
       });
     }
 
-    if (user && user.telegramId !== String(tgUser.id)) {
+    if (user && tgUser.id && user.telegramId !== String(tgUser.id)) {
       user = await db.updateUser(user.id, { telegramId: String(tgUser.id) });
-    }
-
-    if (isAdminSession) {
-      if (!user) {
-        user = await db.createUser({
-          telegramId: String(tgUser.id),
-          username: tgUser.username || 'scalemate_dating',
-          name: tgUser.first_name || 'ScaleMate Admin',
-          age: 25,
-          gender: 'male',
-          preferredGender: 'any',
-          height: 180,
-          weight: 75,
-          bmi: 23.1,
-          city: 'Москва',
-          bio: 'Главный Администратор Модерации ScaleMate 👑',
-          photos: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400'],
-          isVerified: true,
-          verificationStatus: 'approved',
-          isAdmin: true,
-          verificationDate: new Date().toISOString()
-        });
-      } else {
-        user = await db.updateUser(user.id, {
-          isAdmin: true,
-          isVerified: true,
-          verificationStatus: 'approved',
-          isBanned: false
-        });
-      }
     }
 
     if (user && user.isAdmin) {
