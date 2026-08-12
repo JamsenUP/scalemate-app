@@ -648,32 +648,48 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
                       У пользователя пока нет подтвержденного имущества.
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {partner.assets.map((asset, idx) => (
-                        <div key={asset.id || idx} className="glass-premium" style={{ padding: '12px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          {asset.proofPhoto ? (
-                            <img 
-                              src={getPhotoUrl(asset.proofPhoto)} 
-                              alt={asset.name} 
-                              style={{ width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover', cursor: 'pointer' }}
-                              onClick={() => openFullscreen([asset.proofPhoto], 0)}
-                            />
-                          ) : (
-                            <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {asset.category === 'car' ? <Car size={24} color="var(--color-accent)" /> : <Home size={24} color="var(--color-primary)" />}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {partner.assets.map((asset, idx) => {
+                        const assetTitle = asset.title || asset.name || 'Имущество';
+                        const assetPrice = asset.price !== undefined ? asset.price : (asset.value || 0);
+                        const assetPhoto = asset.photo || asset.proofPhoto || null;
+                        const assetType = asset.type || asset.category || 'car';
+
+                        return (
+                          <div key={asset.id || idx} className="glass-premium" style={{ padding: '12px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: assetType === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {assetType === 'car' ? <Car size={22} color="#00f5d4" /> : <Home size={22} color="#a855f7" />}
+                              </div>
+
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: '700', fontSize: '14px', color: '#fff' }}>{assetTitle}</div>
+                                <div style={{ fontSize: '12px', color: 'var(--color-accent)', fontWeight: '700', marginTop: '2px' }}>
+                                  💰 {parseInt(assetPrice).toLocaleString('ru-RU')} ₽
+                                </div>
+                              </div>
+
+                              <span style={{ fontSize: '9px', color: '#00e676', background: 'rgba(0,230,118,0.15)', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
+                                ✓ Подтверждено
+                              </span>
                             </div>
-                          )}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: '700', fontSize: '13px' }}>{asset.name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--color-accent)', fontWeight: '600' }}>
-                              💰 {parseInt(asset.value || 0).toLocaleString('ru-RU')} ₽
-                            </div>
-                            <span style={{ fontSize: '9px', color: '#00e676', background: 'rgba(0,230,118,0.15)', padding: '2px 6px', borderRadius: '6px', marginTop: '2px', display: 'inline-block' }}>
-                              ✓ Подтверждено модератором
-                            </span>
+
+                            {/* Asset Photo Preview */}
+                            {assetPhoto && (
+                              <div 
+                                onClick={() => openFullscreen([assetPhoto], 0)} 
+                                style={{ position: 'relative', width: '100%', height: '150px', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}
+                                title="Нажмите для полноэкранного просмотра"
+                              >
+                                <img src={getPhotoUrl(assetPhoto)} alt={assetTitle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <div style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '3px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: '600', backdropFilter: 'blur(4px)' }}>
+                                  🔍 Нажмите для увеличения
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

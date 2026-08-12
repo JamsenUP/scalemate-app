@@ -551,15 +551,33 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
             {partner.assets && partner.assets.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Подтвержденное имущество:</div>
-                {partner.assets.map((asset, idx) => (
-                  <div key={idx} className="glass" style={{ padding: '10px 12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '18px' }}>{asset.category === 'car' ? '🚗' : '🏠'}</span>
-                    <div>
-                      <div style={{ fontWeight: '700', fontSize: '12px' }}>{asset.name}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--color-accent)' }}>💰 {parseInt(asset.value || 0).toLocaleString('ru-RU')} ₽</div>
+                {partner.assets.map((asset, idx) => {
+                  const assetTitle = asset.title || asset.name || 'Имущество';
+                  const assetPrice = asset.price !== undefined ? asset.price : (asset.value || 0);
+                  const assetPhoto = asset.photo || asset.proofPhoto || null;
+                  const assetType = asset.type || asset.category || 'car';
+
+                  return (
+                    <div key={idx} className="glass" style={{ padding: '10px 12px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '18px' }}>{assetType === 'car' ? '🚗' : '🏠'}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '700', fontSize: '13px', color: '#fff' }}>{assetTitle}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--color-accent)', fontWeight: '700' }}>💰 {parseInt(assetPrice).toLocaleString('ru-RU')} ₽</div>
+                        </div>
+                      </div>
+
+                      {assetPhoto && (
+                        <img 
+                          src={getPhotoUrl(assetPhoto)} 
+                          alt={assetTitle} 
+                          style={{ width: '100%', height: '120px', borderRadius: '10px', objectFit: 'cover', cursor: 'pointer' }}
+                          onClick={() => openFullscreen([assetPhoto], 0)}
+                        />
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

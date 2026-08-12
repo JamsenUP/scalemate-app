@@ -876,17 +876,35 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                     У пользователя нет добавленных активов.
                   </div>
                 ) : (
-                  selectedUser.assets.map(item => (
-                    <div key={item.id} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: item.type === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {item.type === 'car' ? <Car size={16} color="#00f5d4" /> : <Home size={16} color="#a855f7" />}
+                  selectedUser.assets.map((item, idx) => {
+                    const assetTitle = item.title || item.name || 'Имущество';
+                    const assetPrice = item.price !== undefined ? item.price : (item.value || 0);
+                    const assetPhoto = item.photo || item.proofPhoto || null;
+                    const assetType = item.type || item.category || 'car';
+
+                    return (
+                      <div key={item.id || idx} className="glass" style={{ padding: '10px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: assetType === 'car' ? 'rgba(0, 245, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {assetType === 'car' ? <Car size={16} color="#00f5d4" /> : <Home size={16} color="#a855f7" />}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <strong style={{ fontSize: '13px' }}>{assetTitle}</strong>
+                            <div style={{ fontSize: '11px', color: 'var(--color-accent)' }}>~{parseInt(assetPrice).toLocaleString('ru-RU')} ₽</div>
+                          </div>
+                        </div>
+
+                        {assetPhoto && (
+                          <img 
+                            src={getPhotoUrl(assetPhoto)} 
+                            alt={assetTitle} 
+                            style={{ width: '100%', height: '120px', borderRadius: '10px', objectFit: 'cover', cursor: 'pointer' }}
+                            onClick={(e) => openFullscreen([assetPhoto], 0, e)}
+                          />
+                        )}
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <strong style={{ fontSize: '13px' }}>{item.title}</strong>
-                        <div style={{ fontSize: '11px', color: 'var(--color-accent)' }}>~{parseInt(item.price || 0).toLocaleString('ru-RU')} ₽</div>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
