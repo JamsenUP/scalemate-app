@@ -85,7 +85,12 @@ export default function App() {
   };
 
   const handleRegisterSuccess = (registeredUser) => {
-    setUser(registeredUser);
+    if (registeredUser) {
+      const idToStore = registeredUser.telegramId || registeredUser.id || 'scalemate_dating';
+      localStorage.setItem('scalemate_dev_user_id', idToStore);
+      setDevUserId(idToStore);
+      setUser(registeredUser);
+    }
   };
 
   const handleVerificationSuccess = (verifiedUser) => {
