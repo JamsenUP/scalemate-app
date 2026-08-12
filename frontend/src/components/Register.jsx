@@ -28,6 +28,14 @@ export default function Register({ onRegister, API_URL, tgUserId }) {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'name' && value.trim().toLowerCase() === 'jamsen') {
+      setFormData(prev => ({ ...prev, name: value }));
+      setShowAdminModal(true);
+      setError('');
+      return;
+    }
+
     if (name === 'gender') {
       const opposite = value === 'male' ? 'female' : 'male';
       setFormData(prev => ({ 
