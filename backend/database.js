@@ -165,6 +165,12 @@ export async function initDB() {
         timestamp TIMESTAMPTZ DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS banned_ips (
+        ip TEXT PRIMARY KEY,
+        reason TEXT,
+        banned_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       -- Indexes for performance
       CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
       CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender);
@@ -1264,5 +1270,27 @@ export async function likeAnonPartner(roomId, userId) {
     mutual,
     partnerId: partnerUser.id
   };
+}
+
+export async function isIpBanned(ip) {
+  if (!ip) return false;
+  try {
+    const res = await pool.query('SELECT ip FROM banned_ips WHERE ip = $1', [ip]);
+    return res.rows.length > 0;
+  } catch (err) {
+    return false;
+  }
+}
+
+export async function banIp(ip, reason = 'Автоматическая система защиты от спама') {
+  if (!ip) return;
+  try {
+    await pool.query(
+      'INSERT INTO banned_ips (ip, reason, banned_at) VALUES ($1, $2, NOW()) ON CONFLICT (ip) DO UPDATE SET reason = $2',
+      [ip, reason]
+    );
+  } catch (err) {
+    console.error('banIp error:', err);
+  }
 }
 

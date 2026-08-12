@@ -13,30 +13,84 @@ import { sendMatchNotification, sendChatMessageNotification, startBot } from './
 
 dotenv.config();
 
+// Global Anti-Crash Error Handlers (Prevents server from crashing)
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ UNCAUGHT EXCEPTION PREVENTED CRASH:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ UNHANDLED PROMISE REJECTION PREVENTED CRASH:', reason);
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Middleware & Security Headers
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-// Rate Limiter against DDoS & Spam
+// Anti-DDoS Multi-Tier Rate Limiters
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 150,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Слишком много запросов. Пожалуйста, попробуйте через минуту.' }
 });
-app.use('/api/', apiLimiter);
 
-// IP Ban & Activity Tracking Middleware
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Превышен лимит попыток входа/регистрации. Подождите 1 минуту.' }
+});
+
+const chatLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Вы отправляете сообщения слишком часто. Подождите пару секунд.' }
+});
+
+app.use('/api/', apiLimiter);
+app.use('/api/admin/', authLimiter);
+app.use('/api/auth/', authLimiter);
+app.use('/api/chats/', chatLimiter);
+app.use('/api/anon-chat/', chatLimiter);
+app.use('/api/reviews', chatLimiter);
+app.use('/api/stories', chatLimiter);
+app.use('/api/dates', chatLimiter);
+
+// Input Sanitizer to strip XSS & malicious code
+function sanitizeText(str, maxLength = 1000) {
+  if (!str || typeof str !== 'string') return '';
+  const cleaned = str
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+    .replace(/on\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .trim();
+  return cleaned.substring(0, maxLength);
+}
+
+// IP Ban & Security Headers Middleware
 app.use(async (req, res, next) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'X-XSS-Protection': '1; mode=block',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
 
   const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   if (clientIp && await db.isIpBanned(clientIp)) {
@@ -1125,8 +1179,9 @@ app.post('/api/anon-chat/message', async (req, res) => {
     const tgUser = getTelegramUser(req);
     if (!tgUser) return res.status(401).json({ error: 'Необходима авторизация' });
     const { roomId, text } = req.body;
-    if (!roomId || !text) return res.status(400).json({ error: 'roomId и text обязательны' });
-    const result = await db.sendAnonMessage(roomId, tgUser.id, text);
+    const cleanText = sanitizeText(text, 1000);
+    if (!roomId || !cleanText) return res.status(400).json({ error: 'roomId и текст обязательны' });
+    const result = await db.sendAnonMessage(roomId, tgUser.id, cleanText);
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) {
@@ -1198,7 +1253,7 @@ if (fs.existsSync(frontendBuildPath)) {
 }
 
 // Start Server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`ScaleMate backend running at http://localhost:${PORT}`);
   startBot();
 
@@ -1208,3 +1263,7 @@ app.listen(PORT, () => {
     console.error('Database init warning (non-fatal):', err);
   });
 });
+
+// Protect against Slowloris DDoS attacks & hanging connections
+server.setTimeout(30000); // 30s connection timeout
+server.keepAliveTimeout = 65000;
