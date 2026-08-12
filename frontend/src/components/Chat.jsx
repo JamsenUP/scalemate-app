@@ -355,14 +355,15 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
           className="glass" 
           style={{ 
             padding: '12px 16px', 
-            paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+            marginBottom: '75px',
             display: 'flex', 
             gap: '10px', 
             alignItems: 'center', 
             borderTop: '1px solid rgba(255,255,255,0.08)',
             background: 'rgba(16, 12, 28, 0.98)',
             position: 'relative',
-            zIndex: 100
+            zIndex: 100,
+            boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
           }}
         >
           <input 

@@ -336,7 +336,7 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
 
   // Render State 3: Connected Live Chat Screen
   return (
-    <div className="screen-container" style={{ height: '100vh', display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden' }}>
+    <div className="screen-container" style={{ height: 'calc(100vh - 75px)', display: 'flex', flexDirection: 'column', padding: '0', paddingBottom: '75px', overflow: 'hidden' }}>
       
       {/* Toast Notification */}
       {notification && (
@@ -444,17 +444,17 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
 
       {/* Input Message Form */}
       {status === 'closed' ? (
-        <div style={{ padding: '16px', textAlign: 'center', background: 'rgba(255,95,95,0.1)', color: '#ff5f5f', fontSize: '14px', fontWeight: '600' }}>
+        <div style={{ padding: '16px', marginBottom: '75px', textAlign: 'center', background: 'rgba(255,95,95,0.15)', color: '#ff5f5f', fontSize: '14px', fontWeight: '600' }}>
           Собеседник вышел. <button className="btn btn-primary" style={{ marginLeft: '10px', padding: '6px 14px', fontSize: '12px' }} onClick={handleNext}>Искать следующего 🎲</button>
         </div>
       ) : (
-        <form onSubmit={sendMessage} style={{ padding: '12px 16px', background: 'rgba(15, 12, 28, 0.95)', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <form onSubmit={sendMessage} style={{ padding: '12px 16px', marginBottom: '75px', background: 'rgba(15, 12, 28, 0.98)', borderTop: '1px solid rgba(255,255,255,0.12)', display: 'flex', gap: '10px', alignItems: 'center', zIndex: 100, boxShadow: '0 -4px 20px rgba(0,0,0,0.4)' }}>
           <input
             type="text"
             placeholder="Напишите сообщение..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '24px', padding: '12px 18px', color: '#fff', fontSize: '14px', outline: 'none' }}
+            style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '24px', padding: '12px 18px', color: '#fff', fontSize: '14px', outline: 'none' }}
           />
           <button type="submit" className="btn btn-primary" style={{ width: '46px', height: '46px', borderRadius: '50%', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }} disabled={!inputText.trim()}>
             <Send size={18} />
