@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Users, CheckCircle, Clock, Heart, Check, X, RefreshCw, AlertTriangle, Eye, Trash2, ShieldAlert, MessageSquare, UserX, Crown, Ban, AlertCircle, Star, Car, Home, Camera, MapPin, Ruler, Scale, DollarSign, Maximize2 } from 'lucide-react';
+import { ShieldCheck, Users, CheckCircle, Clock, Heart, Check, X, RefreshCw, AlertTriangle, Eye, Trash2, ShieldAlert, MessageSquare, UserX, Crown, Ban, AlertCircle, Star, Car, Home, Camera, MapPin, Ruler, Scale, DollarSign, Maximize2, Edit3, Save } from 'lucide-react';
 import ImageViewerModal from './ImageViewerModal';
 
 export default function AdminPanel({ API_URL, tgUserId, onBack }) {
@@ -29,9 +29,25 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [inspectorData, setInspectorData] = useState(null);
   const [inspectLoading, setInspectLoading] = useState(false);
-  const [profileSubTab, setProfileSubTab] = useState('info'); // 'info' | 'photos' | 'assets' | 'reviews' | 'chats'
+  const [profileSubTab, setProfileSubTab] = useState('info'); // 'info' | 'edit' | 'photos' | 'assets' | 'reviews' | 'chats'
   const [showBanInput, setShowBanInput] = useState(false);
   const [showWarnInput, setShowWarnInput] = useState(false);
+
+  // Admin User Edit Form State
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    age: '',
+    gender: 'female',
+    city: 'Москва',
+    height: 170,
+    weight: 60,
+    income: 0,
+    trustScore: 85,
+    isVerified: false,
+    verificationStatus: 'approved',
+    bio: ''
+  });
+  const [editSaving, setEditSaving] = useState(false);
 
   // Warning & Ban Form states
   const [warnReason, setWarnReason] = useState('');
@@ -102,18 +118,88 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
     setProfileSubTab('info');
     setShowBanInput(false);
     setShowWarnInput(false);
+    setEditFormData({
+      name: u.name || '',
+      age: u.age || '',
+      gender: u.gender || 'female',
+      city: u.city || 'Москва',
+      height: u.height || 170,
+      weight: u.weight || 60,
+      income: u.income || 0,
+      trustScore: u.trustScore !== undefined ? u.trustScore : 85,
+      isVerified: u.isVerified || false,
+      verificationStatus: u.verificationStatus || 'approved',
+      bio: u.bio || ''
+    });
     setInspectLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/user/${u.id}`, { headers: getAuthHeaders() });
       const data = await res.json();
       if (res.ok) {
         setInspectorData(data);
-        if (data.user) setSelectedUser(data.user);
+        if (data.user) {
+          setSelectedUser(data.user);
+          setEditFormData({
+            name: data.user.name || '',
+            age: data.user.age || '',
+            gender: data.user.gender || 'female',
+            city: data.user.city || 'Москва',
+            height: data.user.height || 170,
+            weight: data.user.weight || 60,
+            income: data.user.income || 0,
+            trustScore: data.user.trustScore !== undefined ? data.user.trustScore : 85,
+            isVerified: data.user.isVerified || false,
+            verificationStatus: data.user.verificationStatus || 'approved',
+            bio: data.user.bio || ''
+          });
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
       setInspectLoading(false);
+    }
+  };
+
+  const handleAdminSaveUser = async (e) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/edit-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          targetUserId: selectedUser.id,
+          updates: {
+            name: editFormData.name,
+            age: parseInt(editFormData.age) || selectedUser.age,
+            gender: editFormData.gender,
+            city: editFormData.city,
+            height: parseInt(editFormData.height) || selectedUser.height,
+            weight: parseFloat(editFormData.weight) || selectedUser.weight,
+            income: parseInt(editFormData.income) || 0,
+            trustScore: parseInt(editFormData.trustScore) || 85,
+            isVerified: editFormData.isVerified,
+            verificationStatus: editFormData.verificationStatus,
+            bio: editFormData.bio
+          }
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.user) {
+        setSelectedUser(data.user);
+        setActionMessage('✅ Данные пользователя успешно изменены!');
+        setProfileSubTab('info');
+        fetchAdminData();
+      } else {
+        setActionMessage(`⚠️ ${data.error || 'Ошибка сохранения'}`);
+      }
+    } catch (err) {
+      console.error('Save user error:', err);
+      setActionMessage('⚠️ Ошибка сервера при сохранении');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -466,6 +552,10 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                   <Crown size={14} /> {selectedUser.isAdmin ? 'Снять Мод' : '+Модератор'}
                 </button>
 
+                <button onClick={() => setProfileSubTab('edit')} className="btn" style={{ flex: 1, padding: '8px', fontSize: '11px', background: '#00f5d4', color: '#000', gap: '4px' }}>
+                  <Edit3 size={14} /> Редактировать профиль
+                </button>
+
                 <button onClick={() => setProfileSubTab('chats')} className="btn btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '11px', gap: '4px' }}>
                   <MessageSquare size={14} /> Переписки ({inspectorData?.chatLogs?.length || 0})
                 </button>
@@ -486,7 +576,7 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
               )}
             </div>
 
-            {/* EXACT AUTHENTIC USER PROFILE INTERFACE (READ-ONLY) */}
+            {/* EXACT AUTHENTIC USER PROFILE INTERFACE (READ-ONLY / EDIT) */}
             <div className="glass-premium" style={{ padding: '20px', borderRadius: '20px', textAlign: 'center', position: 'relative' }}>
               
               <div style={{ position: 'relative', width: '90px', height: '90px', margin: 'auto', marginBottom: '12px' }}>
@@ -516,10 +606,13 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                 </div>
               </div>
 
-              {/* Sub-Tabs: Info - Photos - Assets - Reviews - Chats */}
+              {/* Sub-Tabs: Info - Edit - Photos - Assets - Reviews - Chats */}
               <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '3px', borderRadius: '14px', gap: '3px', overflowX: 'auto' }}>
                 <button onClick={() => setProfileSubTab('info')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'info' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                   Инфо
+                </button>
+                <button onClick={() => setProfileSubTab('edit')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'edit' ? '#00f5d4' : 'transparent', color: profileSubTab === 'edit' ? '#000' : '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  ✏️ Изменить
                 </button>
                 <button onClick={() => setProfileSubTab('photos')} style={{ flex: 1, padding: '6px 4px', borderRadius: '10px', border: 'none', background: profileSubTab === 'photos' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '10px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                   Галерея ({selectedUser.photos?.length || 0})
@@ -536,6 +629,166 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
               </div>
 
             </div>
+
+            {/* Sub-Tab: Admin Full Edit User Form */}
+            {profileSubTab === 'edit' && (
+              <form onSubmit={handleAdminSaveUser} className="glass-premium" style={{ padding: '16px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#00f5d4', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '4px' }}>
+                  ✏️ Изменение профиля пользователя (Режим Администратора)
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Имя *</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      value={editFormData.name} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, name: e.target.value }))} 
+                      style={{ padding: '8px', fontSize: '12px' }}
+                      required 
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Возраст *</label>
+                    <input 
+                      type="number" 
+                      className="input-field" 
+                      value={editFormData.age} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, age: e.target.value }))} 
+                      style={{ padding: '8px', fontSize: '12px' }}
+                      required 
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Пол</label>
+                    <select 
+                      className="input-field" 
+                      value={editFormData.gender} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, gender: e.target.value }))}
+                      style={{ padding: '8px', fontSize: '12px' }}
+                    >
+                      <option value="female">Женский 👩</option>
+                      <option value="male">Мужской 👨</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Город / Населенный пункт</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      value={editFormData.city} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, city: e.target.value }))} 
+                      style={{ padding: '8px', fontSize: '12px' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Рост (см)</label>
+                    <input 
+                      type="number" 
+                      className="input-field" 
+                      value={editFormData.height} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, height: e.target.value }))} 
+                      style={{ padding: '8px', fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Вес (кг)</label>
+                    <input 
+                      type="number" 
+                      step="0.1" 
+                      className="input-field" 
+                      value={editFormData.weight} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, weight: e.target.value }))} 
+                      style={{ padding: '8px', fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Доход (₽)</label>
+                    <input 
+                      type="number" 
+                      className="input-field" 
+                      value={editFormData.income} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, income: e.target.value }))} 
+                      style={{ padding: '8px', fontSize: '12px' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Рейтинг Доверия (0-100%)</label>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      className="input-field" 
+                      value={editFormData.trustScore} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, trustScore: e.target.value }))} 
+                      style={{ padding: '8px', fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Статус верификации</label>
+                    <select 
+                      className="input-field" 
+                      value={editFormData.verificationStatus} 
+                      onChange={e => setEditFormData(prev => ({ ...prev, verificationStatus: e.target.value }))}
+                      style={{ padding: '8px', fontSize: '12px' }}
+                    >
+                      <option value="approved">Одобрен ✅</option>
+                      <option value="pending_moderation">На проверке ⏳</option>
+                      <option value="rejected">Отклонен ❌</option>
+                      <option value="none">Не верифицирован ⚪</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+                  <input 
+                    type="checkbox" 
+                    id="admin-is-verified-checkbox" 
+                    checked={editFormData.isVerified} 
+                    onChange={e => setEditFormData(prev => ({ ...prev, isVerified: e.target.checked }))} 
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="admin-is-verified-checkbox" style={{ fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#00f5d4' }}>
+                    Официальная галочка верификации (isVerified)
+                  </label>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>О себе (Биография)</label>
+                  <textarea 
+                    className="input-field" 
+                    rows={2} 
+                    value={editFormData.bio} 
+                    onChange={e => setEditFormData(prev => ({ ...prev, bio: e.target.value }))} 
+                    style={{ padding: '8px', fontSize: '12px', resize: 'none' }}
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={editSaving} 
+                  className="btn btn-accent" 
+                  style={{ padding: '10px', fontSize: '13px', marginTop: '6px', borderRadius: '12px', gap: '6px' }}
+                >
+                  <Save size={16} /> {editSaving ? 'Сохранение...' : '💾 Сохранить изменения пользователя'}
+                </button>
+              </form>
+            )}
 
             {/* Sub-Tab 1: Profile Parameters & Info */}
             {profileSubTab === 'info' && (

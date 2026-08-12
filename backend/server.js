@@ -1010,6 +1010,26 @@ app.post('/api/admin/toggle-mod', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка смены роли' }); }
 });
 
+// Admin Full Profile Edit Endpoint
+app.post('/api/admin/edit-user', async (req, res) => {
+  try {
+    const tgUser = getTelegramUser(req);
+    const isAdmin = await isAdminUser(tgUser);
+    if (!tgUser || !isAdmin) return res.status(403).json({ error: 'Доступ запрещен' });
+
+    const { targetUserId, updates } = req.body;
+    if (!targetUserId || !updates) return res.status(400).json({ error: 'targetUserId и updates обязательны' });
+
+    const updatedUser = await db.updateUser(targetUserId, updates);
+    if (!updatedUser) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    console.error('POST /api/admin/edit-user error:', err);
+    res.status(500).json({ error: 'Ошибка сервера при изменении профиля' });
+  }
+});
+
 // Admin Review Reports & Resolution
 app.get('/api/admin/reports', async (req, res) => {
   try {
