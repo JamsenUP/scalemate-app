@@ -18,6 +18,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [bannedInfo, setBannedInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [serverError, setServerError] = useState(false); // true when backend is unreachable
   const [currentTab, setCurrentTab] = useState('feed'); // 'feed' | 'anon_chat' | 'leaderboard' | 'stories' | 'chats' | 'profile' | 'admin' | 'history'
   const [activePartnerId, setActivePartnerId] = useState(null);
   const [showFaceCheck, setShowFaceCheck] = useState(false);
@@ -51,6 +52,7 @@ export default function App() {
   const fetchProfile = async () => {
     setLoading(true);
     setBannedInfo(null);
+    setServerError(false);
     try {
       const headers = {};
       const tgInit = window.Telegram?.WebApp?.initData;
@@ -65,19 +67,29 @@ export default function App() {
         headers['x-dev-user-id'] = isScalemateDating ? 'scalemate_dating' : devUserId;
       }
 
-      const response = await fetch(`${API_URL}/api/profile`, { headers });
+      // Use a timeout so we don't wait forever if Railway is starting up
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(`${API_URL}/api/profile`, { headers, signal: controller.signal });
+      clearTimeout(timeoutId);
+
       const result = await response.json();
       
       if (response.status === 403 && result.banned) {
         setBannedInfo(result);
         setUser(null);
       } else if (response.ok && result.user) {
+        setServerError(false);
         setUser(result.user);
       } else {
+        // Server responded but no user found — truly new user, show registration
         setUser(null);
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
+      // Network error or timeout — do NOT show registration, show error screen instead
+      setServerError(true);
       setUser(null);
     } finally {
       setLoading(false);
@@ -113,6 +125,26 @@ export default function App() {
         <RefreshCw className="spin" size={32} style={{ animation: 'spin 1.5s linear infinite', color: 'var(--color-primary)' }} />
         <span style={{ marginTop: '15px', color: 'var(--text-muted)', fontSize: '14px' }}>Запуск ScaleMate...</span>
         <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // Server unreachable screen — prevents showing registration when backend is down
+  if (serverError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0813', color: '#fff', padding: '24px', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+        <h2 style={{ fontSize: '20px', marginBottom: '8px', color: '#fff' }}>Сервер временно недоступен</h2>
+        <p style={{ color: '#888', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px' }}>
+          Это не означает что ваш профиль удалён.<br />
+          Сервер запускается или перегружен. Подождите немного и попробуйте снова.
+        </p>
+        <button
+          onClick={fetchProfile}
+          style={{ padding: '12px 32px', borderRadius: '20px', background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: '#fff', border: 'none', fontSize: '15px', cursor: 'pointer', fontWeight: '600' }}
+        >
+          🔄 Повторить
+        </button>
       </div>
     );
   }

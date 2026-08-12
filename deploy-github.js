@@ -16,6 +16,8 @@ async function pushToRepo(repoName) {
     execSync(`git remote add origin ${cloneUrl}`);
     execSync('git add .');
     try {
+      execSync('git config user.email "bot@scalemate.com"');
+      execSync('git config user.name "Auto Bot"');
       execSync('git commit -m "auto-deploy updates"', { stdio: 'ignore' });
     } catch (e) {}
     execSync('git branch -M main');
