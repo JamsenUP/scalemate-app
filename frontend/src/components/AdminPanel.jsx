@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Users, CheckCircle, Clock, Heart, Check, X, RefreshCw, AlertTriangle, Eye, Trash2, ShieldAlert, MessageSquare, UserX, Crown, Ban, AlertCircle, Star, Car, Home, Camera, MapPin, Ruler, Scale, DollarSign } from 'lucide-react';
+import { ShieldCheck, Users, CheckCircle, Clock, Heart, Check, X, RefreshCw, AlertTriangle, Eye, Trash2, ShieldAlert, MessageSquare, UserX, Crown, Ban, AlertCircle, Star, Car, Home, Camera, MapPin, Ruler, Scale, DollarSign, Maximize2 } from 'lucide-react';
+import ImageViewerModal from './ImageViewerModal';
 
 export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const [stats, setStats] = useState(null);
@@ -10,6 +11,19 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
   const [activeTab, setActiveTab] = useState('all'); // 'pending' | 'all' | 'verified' | 'reports'
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState('');
+
+  // Full-screen photo viewer state
+  const [viewingPhotos, setViewingPhotos] = useState(null); // { photos: [], index: 0 }
+
+  const openFullscreen = (photoUrls, index = 0, e = null) => {
+    if (e) e.stopPropagation();
+    if (!photoUrls) return;
+    const array = Array.isArray(photoUrls) ? photoUrls : [photoUrls];
+    const fullUrls = array.map(p => getPhotoUrl(p)).filter(Boolean);
+    if (fullUrls.length > 0) {
+      setViewingPhotos({ photos: fullUrls, index });
+    }
+  };
 
   // Inspector User Modal (Requirement #3 & Full Read-Only Profile View)
   const [selectedUser, setSelectedUser] = useState(null);
@@ -549,18 +563,26 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
                 {/* Uploaded Verification Screenshots */}
                 {(selectedUser.verificationPhoto || selectedUser.verificationSelfie) && (
                   <div className="glass" style={{ padding: '12px', borderRadius: '12px' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Фото проверки верификации:</span>
-                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                      📸 Фото проверки верификации (нажмите для просмотра на весь экран):
+                    </span>
+                    <div style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
                       {selectedUser.verificationPhoto && (
-                        <div>
-                          <div style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Загруженное фото</div>
-                          <img src={getPhotoUrl(selectedUser.verificationPhoto)} alt="Верификация" style={{ width: '80px', height: '80px', borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--color-accent)' }} />
+                        <div 
+                          onClick={(e) => openFullscreen([selectedUser.verificationPhoto, selectedUser.verificationSelfie].filter(Boolean), 0, e)}
+                          style={{ cursor: 'pointer', position: 'relative' }}
+                        >
+                          <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginBottom: '2px' }}>Загруженное фото 🔍</div>
+                          <img src={getPhotoUrl(selectedUser.verificationPhoto)} alt="Верификация" style={{ width: '90px', height: '90px', borderRadius: '12px', objectFit: 'cover', border: '2px solid var(--color-accent)' }} />
                         </div>
                       )}
                       {selectedUser.verificationSelfie && (
-                        <div>
-                          <div style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Камера / Селфи</div>
-                          <img src={getPhotoUrl(selectedUser.verificationSelfie)} alt="Селфи" style={{ width: '80px', height: '80px', borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--color-primary)' }} />
+                        <div 
+                          onClick={(e) => openFullscreen([selectedUser.verificationPhoto, selectedUser.verificationSelfie].filter(Boolean), selectedUser.verificationPhoto ? 1 : 0, e)}
+                          style={{ cursor: 'pointer', position: 'relative' }}
+                        >
+                          <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginBottom: '2px' }}>Камера / Селфи 🔍</div>
+                          <img src={getPhotoUrl(selectedUser.verificationSelfie)} alt="Селфи" style={{ width: '90px', height: '90px', borderRadius: '12px', objectFit: 'cover', border: '2px solid var(--color-primary)' }} />
                         </div>
                       )}
                     </div>
@@ -573,8 +595,16 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
             {profileSubTab === 'photos' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 {selectedUser.photos?.map((photoUrl, idx) => (
-                  <div key={idx} className="glass" style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', height: '140px' }}>
+                  <div 
+                    key={idx} 
+                    className="glass" 
+                    onClick={(e) => openFullscreen(selectedUser.photos, idx, e)}
+                    style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', height: '140px', cursor: 'pointer' }}
+                  >
                     <img src={getPhotoUrl(photoUrl)} alt={`Фото ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s', ':hover': { opacity: 1 } }}>
+                      <Maximize2 size={24} color="#fff" />
+                    </div>
                     {idx === 0 && (
                       <span style={{ position: 'absolute', top: '6px', left: '6px', fontSize: '9px', background: 'var(--color-primary)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
                         ★ Главная
@@ -671,6 +701,15 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
 
           </div>
         </div>
+      )}
+
+      {/* Full-Screen Photo Viewer */}
+      {viewingPhotos && (
+        <ImageViewerModal
+          photos={viewingPhotos.photos}
+          initialIndex={viewingPhotos.index}
+          onClose={() => setViewingPhotos(null)}
+        />
       )}
 
     </div>

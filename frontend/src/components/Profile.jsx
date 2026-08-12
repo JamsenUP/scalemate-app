@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle, Trash2, Image as ImageIcon, Check, Upload } from 'lucide-react';
+import { User, Calendar, Ruler, Scale, DollarSign, ShieldCheck, AlertCircle, Edit3, Camera, CheckCircle2, Lock, Eye, LogOut, MapPin, Star, Car, Home, Plus, ShieldAlert, Award, MessageCircle, Trash2, Image as ImageIcon, Check, Upload, Maximize2 } from 'lucide-react';
 import { getRussianErrorMessage } from '../utils/errorHandler';
 import { POPULAR_SETTLEMENTS } from '../utils/cities';
+import ImageViewerModal from './ImageViewerModal';
 
 export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin, onOpenHistory, onOpenFaceCheck, onUpdateUser, API_URL, tgUserId }) {
   const [activeTab, setActiveTab] = useState('info'); // 'info' | 'photos' | 'assets' | 'reviews'
@@ -9,6 +10,19 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
   const [reviews, setReviews] = useState([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
+  
+  // Full-screen photo viewer state
+  const [viewingPhotos, setViewingPhotos] = useState(null); // { photos: [], index: 0 }
+
+  const openFullscreen = (photoUrls, index = 0, e = null) => {
+    if (e) e.stopPropagation();
+    if (!photoUrls) return;
+    const array = Array.isArray(photoUrls) ? photoUrls : [photoUrls];
+    const fullUrls = array.map(p => getPhotoUrl(p)).filter(Boolean);
+    if (fullUrls.length > 0) {
+      setViewingPhotos({ photos: fullUrls, index });
+    }
+  };
   
   // Edit Form State
   const [formData, setFormData] = useState({
@@ -253,11 +267,12 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
         {/* Header Profile Section with Avatar Camera Overlay */}
         <div className="glass-premium" style={{ padding: '24px', borderRadius: '24px', textAlign: 'center', position: 'relative' }}>
           
-          <div style={{ position: 'relative', width: '104px', height: '104px', margin: 'auto', marginBottom: '14px' }}>
+          <div style={{ position: 'relative', width: '104px', height: '104px', margin: 'auto', marginBottom: '14px', cursor: 'pointer' }}>
             <img 
               src={getPhotoUrl(user.photos?.[0])} 
               onError={handleImageError}
               alt={user.name} 
+              onClick={(e) => openFullscreen(user.photos, 0, e)}
               style={{ width: '104px', height: '104px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--color-primary)' }}
             />
 
@@ -460,8 +475,14 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
               {user.photos?.map((photoUrl, idx) => {
                 const isMain = idx === 0;
                 return (
-                  <div key={idx} className="glass" style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', height: '180px', display: 'flex', flexDirection: 'column' }}>
-                    <img src={getPhotoUrl(photoUrl)} onError={handleImageError} alt={`Фото ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div key={idx} className="glass" style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', height: '180px', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}>
+                    <img 
+                      src={getPhotoUrl(photoUrl)} 
+                      onError={handleImageError} 
+                      alt={`Фото ${idx + 1}`} 
+                      onClick={(e) => openFullscreen(user.photos, idx, e)}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
                     
                     {/* Main Avatar Badge or Set Main Button */}
                     <div style={{ position: 'absolute', top: '8px', left: '8px', right: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -673,6 +694,15 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
             </form>
           </div>
         </div>
+      )}
+
+      {/* Full-Screen Photo Viewer */}
+      {viewingPhotos && (
+        <ImageViewerModal
+          photos={viewingPhotos.photos}
+          initialIndex={viewingPhotos.index}
+          onClose={() => setViewingPhotos(null)}
+        />
       )}
 
     </div>
