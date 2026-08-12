@@ -488,14 +488,31 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
       {/* Partner Full Profile Modal */}
       {showProfileModal && partner && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-premium" style={{ width: '100%', maxWidth: '360px', padding: '24px', borderRadius: '28px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', maxHeight: '90vh', overflowY: 'auto', padding: '24px', borderRadius: '28px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <button style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowProfileModal(false)}>
               <XCircle size={20} />
             </button>
 
+            {/* Header Title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <img 
+                src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
+                alt={partner.name} 
+                style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-primary)' }}
+              />
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {partner.name}, {partner.age}
+                  {partner.isVerified && <ShieldCheck size={18} color="#00e676" />}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>📍 {partner.city || 'Москва'}</div>
+              </div>
+            </div>
+
+            {/* Main Avatar / Photo Gallery */}
             <div 
               onClick={() => openFullscreen(partner.photos?.length ? partner.photos : [partner.verificationSelfie || partner.verificationPhoto], 0)} 
-              style={{ position: 'relative', width: '100%', height: '260px', borderRadius: '20px', overflow: 'hidden', cursor: 'pointer' }}
+              style={{ position: 'relative', width: '100%', height: '220px', borderRadius: '20px', overflow: 'hidden', cursor: 'pointer' }}
               title="Нажмите для полноэкранного просмотра"
             >
               <img 
@@ -504,35 +521,47 @@ export default function AnonChat({ user, API_URL, tgUserId, onNavigateToChats })
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
               />
               <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600' }}>
-                🔍 Полноэкранное фото
+                🔍 Полноэкранный просмотр
               </div>
             </div>
 
-            <div>
-              <div style={{ fontSize: '20px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {partner.name}, {partner.age}
-                {partner.isVerified && <ShieldCheck size={20} color="#00e676" />}
-              </div>
-
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                📍 {partner.city || 'Москва'} • {partner.gender === 'female' ? 'Девушка' : 'Парень'}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-                <span style={{ background: 'rgba(0,230,118,0.15)', color: '#00e676', padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' }}>
-                  ⚖️ Вес: {partner.weight} кг (Верифицирован)
+            {/* Parameters */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ background: 'rgba(0,230,118,0.15)', color: '#00e676', padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' }}>
+                ⚖️ Вес: {partner.weight} кг {partner.isVerified ? '(Верифицирован)' : ''}
+              </span>
+              <span style={{ background: 'rgba(255,255,255,0.08)', padding: '6px 12px', borderRadius: '12px', fontSize: '12px' }}>
+                📏 Рост: {partner.height} см
+              </span>
+              {partner.income > 0 && (
+                <span style={{ background: 'rgba(255,215,0,0.15)', color: '#ffd700', padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600' }}>
+                  💰 Доход: {parseInt(partner.income).toLocaleString('ru-RU')} ₽
                 </span>
-                <span style={{ background: 'rgba(255,255,255,0.08)', padding: '6px 12px', borderRadius: '12px', fontSize: '12px' }}>
-                  📏 Рост: {partner.height} см
-                </span>
-              </div>
-
-              {partner.bio && (
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '12px', lineHeight: '1.4', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '14px' }}>
-                  "{partner.bio}"
-                </p>
               )}
             </div>
+
+            {/* Bio */}
+            {partner.bio && (
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.4', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '14px', margin: 0 }}>
+                "{partner.bio}"
+              </p>
+            )}
+
+            {/* Assets section if present */}
+            {partner.assets && partner.assets.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Подтвержденное имущество:</div>
+                {partner.assets.map((asset, idx) => (
+                  <div key={idx} className="glass" style={{ padding: '10px 12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '18px' }}>{asset.category === 'car' ? '🚗' : '🏠'}</span>
+                    <div>
+                      <div style={{ fontWeight: '700', fontSize: '12px' }}>{asset.name}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--color-accent)' }}>💰 {parseInt(asset.value || 0).toLocaleString('ru-RU')} ₽</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <button className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '16px' }} onClick={() => setShowProfileModal(false)}>
               Вернуться к чату

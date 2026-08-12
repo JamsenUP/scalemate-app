@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowLeft, MessageSquare, Scale, CheckCircle2, UserX, Heart, Dices, Calendar, MapPin, Check, X, Eye } from 'lucide-react';
+import { Send, ArrowLeft, MessageSquare, Scale, CheckCircle2, UserX, Heart, Dices, Calendar, MapPin, Check, X, Eye, Star, Car, Home, Camera, ShieldCheck, Plus } from 'lucide-react';
 import ImageViewerModal from './ImageViewerModal';
 
 export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClearActivePartner, onChatOpenChange }) {
@@ -13,7 +13,61 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
   
   // Partner Profile Modal State
   const [showPartnerProfile, setShowPartnerProfile] = useState(false);
+  const [partnerSubTab, setPartnerSubTab] = useState('info'); // 'info' | 'photos' | 'assets' | 'reviews'
+  const [partnerReviews, setPartnerReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
   const [viewingPhotos, setViewingPhotos] = useState(null);
+
+  useEffect(() => {
+    if (showPartnerProfile && activeChat?.user) {
+      fetchPartnerReviews(activeChat.user.id);
+    }
+  }, [showPartnerProfile, activeChat]);
+
+  const fetchPartnerReviews = async (targetUserId) => {
+    if (!targetUserId) return;
+    setLoadingReviews(true);
+    try {
+      const res = await fetch(`${API_URL}/api/reviews/user/${targetUserId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setPartnerReviews(data.reviews || []);
+      }
+    } catch (err) {
+      console.error('Fetch reviews error:', err);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const handleAddReview = async (e) => {
+    e.preventDefault();
+    if (!activeChat?.user || !reviewComment.trim()) return;
+    try {
+      const res = await fetch(`${API_URL}/api/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          targetUserId: activeChat.user.id,
+          rating: reviewRating,
+          comment: reviewComment.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setReviewComment('');
+        setShowReviewForm(false);
+        fetchPartnerReviews(activeChat.user.id);
+      } else {
+        alert(data.error || 'Ошибка добавления отзыва');
+      }
+    } catch (err) {
+      console.error('Add review error:', err);
+    }
+  };
 
   const openFullscreen = (photoUrls, index = 0) => {
     if (!photoUrls) return;
@@ -443,7 +497,7 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
         {/* Partner Full Profile Modal */}
         {showPartnerProfile && partner && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-            <div className="glass-premium" style={{ width: '100%', maxWidth: '380px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '28px', padding: '24px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="glass-premium" style={{ width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '28px', padding: '20px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               
               {/* Top Bar Close Button */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -452,87 +506,270 @@ export default function Chat({ user, API_URL, tgUserId, activePartnerId, onClear
                 </span>
                 <button 
                   onClick={() => setShowPartnerProfile(false)} 
-                  style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: '50%', width: '34px', height: '34px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* Main Avatar / Photo Gallery */}
-              <div 
-                onClick={() => openFullscreen(partner.photos?.length ? partner.photos : [partner.verificationSelfie || partner.verificationPhoto], 0)} 
-                style={{ position: 'relative', width: '100%', height: '240px', borderRadius: '20px', overflow: 'hidden', cursor: 'pointer' }}
-                title="Нажмите для полноэкранного просмотра"
-              >
+              {/* Header Title */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <img 
                   src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
                   alt={partner.name} 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                  style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-primary)' }}
                 />
-                <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', backdropFilter: 'blur(4px)' }}>
-                  🔍 Полноэкранное фото
+                <div>
+                  <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>
+                    {partner.name}, {partner.age}
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>📍 {partner.city || 'Москва'}</p>
                 </div>
               </div>
 
-              {/* Profile Details */}
-              <div style={{ textAlign: 'center' }}>
-                <h3 style={{ fontSize: '22px', fontWeight: '800', marginBottom: '2px' }}>
-                  {partner.name}, {partner.age}
-                </h3>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>📍 {partner.city || 'Москва'}</p>
+              {/* Sub-Tabs: Info - Gallery - Assets - Reviews */}
+              <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '3px', borderRadius: '14px', gap: '3px', overflowX: 'auto' }}>
+                <button 
+                  onClick={() => setPartnerSubTab('info')}
+                  style={{ flex: 1, padding: '6px 2px', borderRadius: '10px', border: 'none', background: partnerSubTab === 'info' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Инфо
+                </button>
+                <button 
+                  onClick={() => setPartnerSubTab('photos')}
+                  style={{ flex: 1, padding: '6px 2px', borderRadius: '10px', border: 'none', background: partnerSubTab === 'photos' ? 'var(--color-primary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Галерея ({partner.photos?.length || (partner.verificationSelfie ? 1 : 0)})
+                </button>
+                <button 
+                  onClick={() => setPartnerSubTab('assets')}
+                  style={{ flex: 1, padding: '6px 2px', borderRadius: '10px', border: 'none', background: partnerSubTab === 'assets' ? 'var(--color-secondary)' : 'transparent', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Имущество ({partner.assets?.length || 0})
+                </button>
+                <button 
+                  onClick={() => setPartnerSubTab('reviews')}
+                  style={{ flex: 1, padding: '6px 2px', borderRadius: '10px', border: 'none', background: partnerSubTab === 'reviews' ? 'var(--color-accent)' : 'transparent', color: partnerSubTab === 'reviews' ? '#000' : '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Отзывы ({partnerReviews.length})
+                </button>
               </div>
 
-              {/* Parameters Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
-                  📏 <strong>Рост:</strong> {partner.height} см
-                </div>
-                {partner.gender === 'female' ? (
-                  <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
-                    ⚖️ <strong>Вес:</strong> {partner.weight} кг {partner.isVerified ? '✓' : ''}
+              {/* Sub-Tab 1: INFO */}
+              {partnerSubTab === 'info' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div 
+                    onClick={() => openFullscreen(partner.photos?.length ? partner.photos : [partner.verificationSelfie || partner.verificationPhoto], 0)} 
+                    style={{ position: 'relative', width: '100%', height: '200px', borderRadius: '16px', overflow: 'hidden', cursor: 'pointer' }}
+                    title="Нажмите для полноэкранного просмотра"
+                  >
+                    <img 
+                      src={getPhotoUrl(partner.photos?.[0] || partner.verificationSelfie || partner.verificationPhoto)} 
+                      alt={partner.name} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
+                    <div style={{ position: 'absolute', bottom: '8px', right: '8px', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '4px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600' }}>
+                      🔍 Полноэкранный вид
+                    </div>
                   </div>
-                ) : (
-                  <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
-                    💰 <strong>Доход:</strong> {parseInt(partner.income || 0).toLocaleString('ru-RU')} ₽
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
+                      📏 <strong>Рост:</strong> {partner.height} см
+                    </div>
+                    {partner.gender === 'female' ? (
+                      <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
+                        ⚖️ <strong>Вес:</strong> {partner.weight} кг {partner.isVerified ? '✓' : ''}
+                      </div>
+                    ) : (
+                      <div className="glass" style={{ padding: '10px', borderRadius: '12px', fontSize: '12px', textAlign: 'center' }}>
+                        💰 <strong>Доход:</strong> {parseInt(partner.income || 0).toLocaleString('ru-RU')} ₽
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Trust Score */}
-              <div style={{ background: 'rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Рейтинг Доверия:</span>
-                  <strong style={{ color: 'var(--color-accent)' }}>{partner.trustScore || 85}%</strong>
-                </div>
-                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${partner.trustScore || 85}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent))' }} />
-                </div>
-              </div>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Рейтинг Доверия:</span>
+                      <strong style={{ color: 'var(--color-accent)' }}>{partner.trustScore || 85}%</strong>
+                    </div>
+                    <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ width: `${partner.trustScore || 85}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-accent))' }} />
+                    </div>
+                  </div>
 
-              {/* Bio */}
-              {partner.bio && (
-                <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '13px', lineHeight: '1.4' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>О себе:</span>
-                  "{partner.bio}"
+                  {partner.bio && (
+                    <div className="glass" style={{ padding: '12px', borderRadius: '14px', fontSize: '12px', lineHeight: '1.4' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>О себе:</span>
+                      "{partner.bio}"
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+              {/* Sub-Tab 2: PHOTOS / GALLERY */}
+              {partnerSubTab === 'photos' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Галерея пользователя:</div>
+                  {(!partner.photos || partner.photos.length === 0) ? (
+                    <div className="glass" style={{ padding: '20px', textAlign: 'center', borderRadius: '16px' }}>
+                      <img 
+                        src={getPhotoUrl(partner.verificationSelfie || partner.verificationPhoto)} 
+                        alt="Верификационное фото"
+                        style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '14px', cursor: 'pointer' }}
+                        onClick={() => openFullscreen([partner.verificationSelfie || partner.verificationPhoto], 0)}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', display: 'block' }}>Верификационное селфи (нажмите для увеличения)</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {partner.photos.map((ph, idx) => (
+                        <div 
+                          key={idx} 
+                          className="glass" 
+                          style={{ position: 'relative', height: '130px', borderRadius: '14px', overflow: 'hidden', cursor: 'pointer' }}
+                          onClick={() => openFullscreen(partner.photos, idx)}
+                        >
+                          <img src={getPhotoUrl(ph)} alt={`Фото ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sub-Tab 3: ASSETS (Имущество) */}
+              {partnerSubTab === 'assets' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Подтвержденное имущество:</div>
+                  {(!partner.assets || partner.assets.length === 0) ? (
+                    <div className="glass" style={{ padding: '25px 15px', textAlign: 'center', borderRadius: '16px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                      <Car size={32} color="var(--text-muted)" style={{ margin: 'auto', marginBottom: '8px' }} />
+                      У пользователя пока нет подтвержденного имущества.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {partner.assets.map((asset, idx) => (
+                        <div key={asset.id || idx} className="glass-premium" style={{ padding: '12px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {asset.proofPhoto ? (
+                            <img 
+                              src={getPhotoUrl(asset.proofPhoto)} 
+                              alt={asset.name} 
+                              style={{ width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover', cursor: 'pointer' }}
+                              onClick={() => openFullscreen([asset.proofPhoto], 0)}
+                            />
+                          ) : (
+                            <div style={{ width: '50px', height: '50px', borderRadius: '10px', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {asset.category === 'car' ? <Car size={24} color="var(--color-accent)" /> : <Home size={24} color="var(--color-primary)" />}
+                            </div>
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: '700', fontSize: '13px' }}>{asset.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-accent)', fontWeight: '600' }}>
+                              💰 {parseInt(asset.value || 0).toLocaleString('ru-RU')} ₽
+                            </div>
+                            <span style={{ fontSize: '9px', color: '#00e676', background: 'rgba(0,230,118,0.15)', padding: '2px 6px', borderRadius: '6px', marginTop: '2px', display: 'inline-block' }}>
+                              ✓ Подтверждено модератором
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sub-Tab 4: REVIEWS (Отзывы) */}
+              {partnerSubTab === 'reviews' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Отзывы о пользователе:</span>
+                    <button 
+                      onClick={() => setShowReviewForm(!showReviewForm)}
+                      className="btn btn-accent" 
+                      style={{ padding: '4px 10px', fontSize: '10px', borderRadius: '10px', gap: '4px' }}
+                    >
+                      <Plus size={12} /> {showReviewForm ? 'Отмена' : 'Написать'}
+                    </button>
+                  </div>
+
+                  {/* Add Review Form */}
+                  {showReviewForm && (
+                    <form onSubmit={handleAddReview} className="glass" style={{ padding: '12px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: '700' }}>Ваша оценка:</div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star 
+                            key={star} 
+                            size={20} 
+                            color={star <= reviewRating ? '#ffd700' : 'rgba(255,255,255,0.2)'} 
+                            fill={star <= reviewRating ? '#ffd700' : 'none'} 
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setReviewRating(star)}
+                          />
+                        ))}
+                      </div>
+                      <textarea 
+                        className="input-field" 
+                        placeholder="Поделитесь впечатлением о собеседнике..." 
+                        rows={2} 
+                        value={reviewComment} 
+                        onChange={e => setReviewComment(e.target.value)}
+                        style={{ padding: '8px', fontSize: '12px', resize: 'none' }}
+                        required 
+                      />
+                      <button type="submit" className="btn btn-accent" style={{ padding: '8px', fontSize: '11px', borderRadius: '10px' }}>
+                        Опубликовать отзыв
+                      </button>
+                    </form>
+                  )}
+
+                  {/* Reviews List */}
+                  {loadingReviews ? (
+                    <div style={{ textAlign: 'center', padding: '15px', color: 'var(--text-muted)', fontSize: '12px' }}>Загрузка отзывов...</div>
+                  ) : partnerReviews.length === 0 ? (
+                    <div className="glass" style={{ padding: '20px', textAlign: 'center', borderRadius: '16px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                      Пока нет отзывов. Напишите первый отзыв!
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {partnerReviews.map((rev) => (
+                        <div key={rev.id} className="glass" style={{ padding: '10px 12px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '12px', fontWeight: '700' }}>{rev.reviewer_name || 'Пользователь'}</span>
+                            <div style={{ display: 'flex', gap: '2px' }}>
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star key={s} size={11} color={s <= rev.rating ? '#ffd700' : 'rgba(255,255,255,0.2)'} fill={s <= rev.rating ? '#ffd700' : 'none'} />
+                              ))}
+                            </div>
+                          </div>
+                          <p style={{ fontSize: '12px', color: '#fff', margin: 0 }}>"{rev.comment}"</p>
+                          <span style={{ fontSize: '9px', color: 'var(--text-muted)', textAlign: 'right' }}>
+                            {new Date(rev.created_at).toLocaleDateString('ru-RU')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Bottom Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <button 
                   onClick={() => { setShowPartnerProfile(false); setShowDateModal(true); }}
                   className="btn btn-accent" 
-                  style={{ padding: '12px', fontSize: '13px', borderRadius: '14px', gap: '6px' }}
+                  style={{ flex: 1, padding: '10px', fontSize: '12px', borderRadius: '12px', gap: '4px' }}
                 >
-                  <Calendar size={16} /> Назначить свидание 📍
+                  <Calendar size={14} /> Свидание 📍
                 </button>
 
                 <button 
                   onClick={() => setShowPartnerProfile(false)}
                   className="btn btn-secondary" 
-                  style={{ padding: '10px', fontSize: '12px', borderRadius: '14px' }}
+                  style={{ flex: 1, padding: '10px', fontSize: '12px', borderRadius: '12px' }}
                 >
-                  Вернуться к переписке 💬
+                  В чат 💬
                 </button>
               </div>
 
