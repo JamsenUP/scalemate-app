@@ -423,10 +423,6 @@ export default function Profile({ user, onReVerify, onResetProfile, onOpenAdmin,
               <button onClick={onOpenHistory} className="btn btn-secondary" style={{ flex: 1, padding: '10px', fontSize: '12px', borderRadius: '12px' }}>
                 <Eye size={14} /> История свайпов
               </button>
-              
-              <button onClick={onOpenFaceCheck} className="btn btn-secondary" style={{ flex: 1, padding: '10px', fontSize: '12px', borderRadius: '12px' }}>
-                <Camera size={14} /> Biometric FaceCheck
-              </button>
 
               {(user.isAdmin || user.name === 'admin') && (
                 <button onClick={onOpenAdmin} className="btn btn-accent" style={{ width: '100%', padding: '12px', fontSize: '13px', borderRadius: '12px', gap: '6px' }}>
