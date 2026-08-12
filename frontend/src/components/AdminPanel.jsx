@@ -365,28 +365,62 @@ export default function AdminPanel({ API_URL, tgUserId, onBack }) {
           </div>
         )}
 
-        {/* Stats Grid */}
+        {/* Live Admin Analytics Grid */}
         {stats && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-            <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
-              <Users size={16} color="var(--color-primary)" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800' }}>{stats.totalUsers || allList.length}</div>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Всего</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* Highlight Cards: Online & Total Registered */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              
+              {/* Online Users Card */}
+              <div className="glass-premium" style={{ padding: '14px', borderRadius: '18px', border: '1px solid rgba(0, 245, 212, 0.3)', background: 'linear-gradient(135deg, rgba(0,245,212,0.1), rgba(0,0,0,0.4))', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Сейчас Онлайн</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(0,245,212,0.2)', color: '#00f5d4', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '800' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00f5d4', boxShadow: '0 0 8px #00f5d4' }} />
+                    LIVE
+                  </span>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '900', color: '#00f5d4' }}>
+                  {stats.onlineUsers !== undefined ? stats.onlineUsers : 0}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>Активны за 5 минут</div>
+              </div>
+
+              {/* Total Registered Card */}
+              <div className="glass-premium" style={{ padding: '14px', borderRadius: '18px', border: '1px solid rgba(168, 85, 247, 0.3)', background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(0,0,0,0.4))' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Зарегистрировано</span>
+                  <Users size={16} color="var(--color-primary)" />
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '900', color: '#fff' }}>
+                  {stats.totalUsers || allList.length}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>Всего пользователей</div>
+              </div>
+
             </div>
-            <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
-              <Clock size={16} color="#ffd700" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#ffd700' }}>{pending.length}</div>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Проверка</div>
-            </div>
-            <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
-              <CheckCircle size={16} color="#00f5d4" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#00f5d4' }}>{verifiedList.length}</div>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Одобрено</div>
-            </div>
-            <div className="glass" style={{ padding: '10px', borderRadius: '14px', textAlign: 'center' }}>
-              <ShieldAlert size={16} color="#ff5f5f" style={{ margin: 'auto' }} />
-              <div style={{ fontSize: '15px', fontWeight: '800', color: '#ff5f5f' }}>{reports.length}</div>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Жалобы</div>
+
+            {/* Secondary Stats Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
+              <div className="glass" style={{ padding: '8px 10px', borderRadius: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#fff' }}>{stats.maleUsers || 0}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>👨 Мужчины</div>
+              </div>
+
+              <div className="glass" style={{ padding: '8px 10px', borderRadius: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#fff' }}>{stats.femaleUsers || 0}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>👩 Женщины</div>
+              </div>
+
+              <div className="glass" style={{ padding: '8px 10px', borderRadius: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#ffd700' }}>{pending.length}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>⏳ Проверка</div>
+              </div>
+
+              <div className="glass" style={{ padding: '8px 10px', borderRadius: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: '800', color: '#ff5f5f' }}>{reports.length}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>🚨 Жалобы</div>
+              </div>
             </div>
           </div>
         )}

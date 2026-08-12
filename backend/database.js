@@ -936,12 +936,18 @@ export async function getLeaderboard(gender = 'male', city = null) {
 
 export async function getAdminStats() {
   const total = await pool.query(`SELECT COUNT(*) FROM users`);
+  const online = await pool.query(`SELECT COUNT(*) FROM users WHERE last_seen_at >= NOW() - INTERVAL '5 minutes'`);
+  const males = await pool.query(`SELECT COUNT(*) FROM users WHERE gender = 'male'`);
+  const females = await pool.query(`SELECT COUNT(*) FROM users WHERE gender = 'female'`);
   const verified = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = true`);
   const pending = await pool.query(`SELECT COUNT(*) FROM users WHERE is_verified = false OR is_verified IS NULL`);
   const banned = await pool.query(`SELECT COUNT(*) FROM users WHERE is_banned = true`);
 
   return {
     totalUsers: parseInt(total.rows[0].count),
+    onlineUsers: parseInt(online.rows[0].count),
+    maleUsers: parseInt(males.rows[0].count),
+    femaleUsers: parseInt(females.rows[0].count),
     verifiedUsers: parseInt(verified.rows[0].count),
     pendingUsers: parseInt(pending.rows[0].count),
     bannedUsers: parseInt(banned.rows[0].count)
