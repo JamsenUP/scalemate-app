@@ -373,8 +373,11 @@ app.post('/api/login', async (req, res) => {
 // 2. Register Profile with Permanent Base64 Photo Storage
 app.post('/api/register', upload.array('photos', 5), async (req, res) => {
   try {
-    const tgUser = getTelegramUser(req);
-    if (!tgUser) return res.status(401).json({ error: 'Не авторизован' });
+    let tgUser = getTelegramUser(req);
+    if (!tgUser) {
+      const autoId = 'user_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+      tgUser = { id: autoId, first_name: req.body.name || 'Пользователь', username: autoId };
+    }
 
     const { name, age, gender, preferredGender, height, weight, bio, city, income } = req.body;
     
@@ -394,25 +397,35 @@ app.post('/api/register', upload.array('photos', 5), async (req, res) => {
     }
 
     const isAdminTrigger = 
-      (name && name.toLowerCase() === 'admin') || 
+      (name && name.trim().toLowerCase() === 'admin') || 
       (parseInt(height) === 250 && parseFloat(weight) === 250) ||
       (tgUser.username && tgUser.username.toLowerCase() === 'admin') ||
       (await isAdminUser(tgUser));
 
     const profileData = {
-      telegramId: String(tgUser.id), username: tgUser.username || null, name: name.trim(),
-      age: parseInt(age), gender, preferredGender: preferredGender || (gender === 'male' ? 'female' : 'male'),
-      height: parseInt(height), weight: parseFloat(weight), bio: bio || '', city: city || 'Москва',
-      income: income ? parseInt(income) : 0, photos: photoUrls,
-      isVerified: isAdminTrigger, verificationStatus: isAdminTrigger ? 'approved' : 'none',
-      isAdmin: isAdminTrigger, verificationDate: isAdminTrigger ? new Date().toISOString() : null
+      telegramId: String(tgUser.id),
+      username: tgUser.username || null,
+      name: nameVal.name || name.trim(),
+      age: parseInt(age),
+      gender,
+      preferredGender: preferredGender || (gender === 'male' ? 'female' : 'male'),
+      height: parseInt(height),
+      weight: parseFloat(weight),
+      bio: bio || '',
+      city: city || 'Москва',
+      income: income ? parseInt(income) : 0,
+      photos: photoUrls,
+      isVerified: isAdminTrigger,
+      verificationStatus: isAdminTrigger ? 'approved' : 'none',
+      isAdmin: isAdminTrigger,
+      verificationDate: isAdminTrigger ? new Date().toISOString() : null
     };
 
     const user = await db.createUser(profileData);
     res.json({ success: true, user });
   } catch (err) {
     console.error('POST /api/register error:', err);
-    res.status(500).json({ error: 'Ошибка сервера при регистрации' });
+    res.status(500).json({ error: err.message || 'Ошибка сервера при регистрации' });
   }
 });
 

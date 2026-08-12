@@ -369,7 +369,7 @@ export async function getUsers() {
 }
 
 export async function createUser(user) {
-  const id = user.telegramId || String(Date.now());
+  const id = user.telegramId || user.id || 'user_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
   const bmi = calcBmi(user.height, user.weight);
   const city = user.city || 'Москва';
   const res = await pool.query(
@@ -383,7 +383,7 @@ export async function createUser(user) {
       $8, $9, $10, $11, $12, $13, $14,
       $15, $16, $17, $18, $19, $20, $21
     )
-    ON CONFLICT (telegram_id) DO UPDATE SET
+    ON CONFLICT (id) DO UPDATE SET
       username = EXCLUDED.username,
       name = EXCLUDED.name,
       age = EXCLUDED.age,
@@ -403,7 +403,7 @@ export async function createUser(user) {
     RETURNING *`,
     [
       id,
-      user.telegramId || null,
+      user.telegramId || id,
       user.username || null,
       user.name || 'Аноним',
       parseInt(user.age) || 18,
